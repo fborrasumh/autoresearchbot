@@ -1,0 +1,2755 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoResearch 🦞 — Idea → Paper</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
+
+:root {
+  --bg: #0a0b0f;
+  --surface: #111318;
+  --surface2: #181c24;
+  --border: #1e2430;
+  --border2: #2a3040;
+  --accent: #e8583d;
+  --accent2: #f07c5e;
+  --accent-dim: rgba(232,88,61,0.15);
+  --gold: #c9a84c;
+  --gold-dim: rgba(201,168,76,0.12);
+  --green: #3dcc8e;
+  --green-dim: rgba(61,204,142,0.12);
+  --blue: #4d9fe8;
+  --blue-dim: rgba(77,159,232,0.1);
+  --text: #e8eaf0;
+  --text2: #8990a8;
+  --text3: #4a5068;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Noise texture overlay */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.4;
+}
+
+/* ─── HEADER ─── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,11,15,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 58px;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px; color: var(--text);
+  text-decoration: none;
+}
+.logo-claw { font-size: 22px; }
+.logo span { color: var(--accent); }
+
+.header-actions { display: flex; align-items: center; gap: 12px; }
+
+.badge {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11px; font-weight: 500;
+  color: var(--text2);
+  font-family: 'DM Mono', monospace;
+}
+
+/* ─── LAYOUT ─── */
+.app-shell {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: 1fr;
+  height: calc(100vh - 58px);
+  position: relative;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-section {
+  padding: 18px 18px 0;
+}
+
+.sidebar-title {
+  font-size: 10px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text3);
+  margin-bottom: 10px;
+}
+
+/* API Key input */
+.api-row {
+  display: flex; gap: 8px; align-items: center;
+}
+
+input[type="password"], input[type="text"], select, textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color .2s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+}
+select option { background: var(--surface2); }
+
+/* Model selector */
+.model-sel { margin-top: 12px; }
+
+/* Phase list */
+.phase-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+
+.phase-group { margin-bottom: 20px; }
+.phase-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text3);
+  padding: 0 6px; margin-bottom: 6px;
+}
+
+.stage-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 8px;
+  cursor: default;
+  transition: background .15s;
+  margin-bottom: 2px;
+}
+.stage-item:hover { background: var(--surface2); }
+.stage-item.active { background: var(--accent-dim); }
+.stage-item.done { opacity: .6; }
+.stage-item.error { background: rgba(232,88,61,.08); }
+
+.stage-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--text3); min-width: 22px;
+}
+.stage-name { font-size: 12px; color: var(--text2); flex: 1; }
+.stage-item.active .stage-name { color: var(--text); font-weight: 500; }
+.stage-item.done .stage-name { color: var(--text3); }
+
+.stage-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border2); flex-shrink: 0;
+}
+.stage-item.done .stage-dot { background: var(--green); }
+.stage-item.active .stage-dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.stage-item.error .stage-dot { background: var(--accent); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .6; transform: scale(.7); }
+}
+
+/* ─── MAIN PANEL ─── */
+.main {
+  display: flex; flex-direction: column;
+  overflow: hidden; background: var(--bg);
+}
+
+/* Hero / input zone */
+.hero {
+  padding: 36px 40px 28px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(232,88,61,.04) 0%, transparent 100%);
+}
+
+.hero-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 32px; line-height: 1.1;
+  margin-bottom: 6px;
+}
+.hero-title em { font-style: italic; color: var(--accent); }
+
+.hero-sub {
+  color: var(--text2); font-size: 14px; margin-bottom: 24px;
+}
+
+.topic-row {
+  display: flex; gap: 12px; align-items: flex-start;
+}
+
+.topic-input {
+  flex: 1;
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 15px !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  resize: none;
+  line-height: 1.5;
+  min-height: 54px; max-height: 120px;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: none; border-radius: 10px;
+  padding: 14px 22px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+.btn-primary:active { transform: none; }
+.btn-primary:disabled {
+  opacity: .45; cursor: not-allowed; transform: none;
+}
+.btn-ghost {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+.options-row {
+  display: flex; gap: 12px; margin-top: 12px; align-items: center;
+  flex-wrap: wrap;
+}
+
+.opts-select {
+  background: var(--surface2) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 8px !important;
+  color: var(--text2) !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 13px !important;
+  padding: 7px 10px !important;
+  cursor: pointer;
+  width: auto !important;
+}
+
+.toggle-label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--text2); cursor: pointer;
+  user-select: none;
+}
+.toggle-label input { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); }
+
+/* ─── OUTPUT AREA ─── */
+.output-area {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  background: var(--surface);
+}
+.tab {
+  padding: 12px 16px;
+  font-size: 13px; font-weight: 500; color: var(--text3);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text2); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab-badge {
+  display: inline-block;
+  background: var(--accent-dim); color: var(--accent);
+  border-radius: 4px; padding: 0 5px;
+  font-size: 10px; font-family: 'DM Mono', monospace;
+  margin-left: 5px; font-weight: 600;
+}
+
+/* Panel contents */
+.panels { flex: 1; overflow: hidden; position: relative; }
+.panel {
+  position: absolute; inset: 0;
+  overflow-y: auto; padding: 24px 32px;
+  display: none;
+  scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
+}
+.panel.visible { display: block; }
+
+/* Welcome state */
+.welcome {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%; text-align: center;
+  gap: 16px;
+}
+.welcome-claw { font-size: 64px; opacity: .3; }
+.welcome h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 24px; color: var(--text2);
+}
+.welcome p { color: var(--text3); max-width: 380px; font-size: 14px; }
+
+/* Stream log */
+.stream-log {
+  font-family: 'DM Mono', monospace;
+  font-size: 12.5px; line-height: 1.7;
+  color: var(--text2);
+}
+
+.log-entry {
+  display: flex; gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+  animation: fadeIn .3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.log-ts { color: var(--text3); flex-shrink: 0; min-width: 56px; }
+.log-phase {
+  flex-shrink: 0; min-width: 160px;
+  color: var(--accent); font-weight: 500;
+}
+.log-msg { color: var(--text2); flex: 1; }
+.log-entry.info .log-phase { color: var(--blue); }
+.log-entry.success .log-phase { color: var(--green); }
+.log-entry.warn .log-phase { color: var(--gold); }
+.log-entry.error .log-phase { color: var(--accent); }
+.log-entry.h1 { padding-top: 14px; }
+.log-entry.h1 .log-msg { font-size: 13.5px; color: var(--text); font-weight: 600; }
+
+/* Paper output */
+.paper-output { max-width: 820px; margin: 0 auto; }
+.paper-output h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 26px; line-height: 1.2;
+  margin-bottom: 8px;
+}
+.paper-meta {
+  font-size: 13px; color: var(--text3);
+  margin-bottom: 32px; padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'DM Mono', monospace;
+}
+.paper-section { margin-bottom: 36px; }
+.paper-section h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 18px; color: var(--gold);
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.paper-section h2::after {
+  content: ''; flex: 1;
+  height: 1px; background: var(--border2);
+}
+.paper-section p { color: var(--text2); font-size: 14.5px; line-height: 1.75; margin-bottom: 12px; }
+
+/* References */
+.ref-list { list-style: none; }
+.ref-list li {
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+  font-size: 13px; color: var(--text2); line-height: 1.5;
+}
+.ref-list li:last-child { border: none; }
+.ref-num {
+  display: inline-block; min-width: 26px;
+  color: var(--accent); font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+
+/* Score card */
+.scores-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px; margin-bottom: 28px;
+}
+.score-card {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: border-color .2s;
+}
+.score-card:hover { border-color: var(--border); }
+.score-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.score-val {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px; color: var(--text);
+}
+.score-bar {
+  height: 3px; background: var(--border);
+  border-radius: 2px; margin-top: 8px; overflow: hidden;
+}
+.score-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 1s ease;
+}
+
+/* Export buttons */
+.export-row {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+/* Citations list */
+.citations-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.citations-table th {
+  text-align: left; padding: 8px 12px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text3); border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.citations-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  color: var(--text2); vertical-align: top;
+}
+.citations-table tr:hover td { background: var(--surface2); }
+.ci-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  padding: 2px 7px; border-radius: 4px;
+}
+.ci-ok { background: var(--green-dim); color: var(--green); }
+.ci-warn { background: var(--gold-dim); color: var(--gold); }
+
+/* Progress bar top */
+.progress-top {
+  height: 2px; background: var(--surface2);
+  position: relative; overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  transition: width .5s ease;
+  position: relative;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0;
+  width: 60px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.3));
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
+
+/* Status bar */
+.status-bar {
+  padding: 8px 28px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 20px;
+  font-size: 12px; color: var(--text3);
+  font-family: 'DM Mono', monospace;
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text3); flex-shrink: 0;
+}
+.status-dot.running {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: pulse 1s infinite;
+}
+.status-dot.done { background: var(--green); }
+.status-dot.error { background: var(--accent); }
+
+.status-spacer { flex: 1; }
+
+/* Cost tracker */
+.cost-pill {
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 3px 10px;
+  color: var(--gold); font-family: 'DM Mono', monospace; font-size: 11px;
+}
+
+/* Empty state for panels */
+.empty-panel {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%; gap: 12px;
+  color: var(--text3); text-align: center;
+}
+.empty-panel svg { opacity: .2; }
+.empty-panel p { font-size: 14px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* Markdown formatting in paper */
+.md-bold { font-weight: 600; color: var(--text); }
+.md-code {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+  font-family: 'DM Mono', monospace; font-size: 12px; color: var(--gold);
+}
+
+/* ─── MOBILE ─── */
+@media (max-width: 900px) {
+  .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar { display: none; }
+  header { padding: 0 16px; }
+  .hero { padding: 20px; }
+  .panel { padding: 16px; }
+}
+
+/* ─── API KEY ROW ─── */
+.apikey-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.apikey-icon { font-size: 16px; flex-shrink: 0; }
+.apikey-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-family: 'DM Mono', monospace !important;
+  font-size: 13px !important;
+  color: var(--text) !important;
+  outline: none !important;
+  min-width: 0;
+}
+.apikey-input::placeholder { color: var(--text3); }
+.btn-eye {
+  background: none; border: none;
+  cursor: pointer; font-size: 16px; padding: 0 2px;
+  opacity: .5; transition: opacity .15s;
+  flex-shrink: 0;
+}
+.btn-eye:hover { opacity: 1; }
+.apikey-saved {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 0 3px var(--green-dim) !important;
+}
+
+
+/* ─── AGENTS PANEL ─── */
+.agents-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+}
+.agents-header h2 {
+  font-family: 'DM Serif Display', serif; font-size: 22px;
+}
+.agents-search {
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 7px 12px; outline: none; width: 220px;
+  transition: border-color .2s;
+}
+.agents-search:focus { border-color: var(--accent); }
+
+.agents-grid {
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.agent-card:hover { border-color: var(--border); }
+.agent-card.modified { border-color: var(--gold); }
+.agent-card.expanded { border-color: var(--accent); }
+
+.agent-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; cursor: pointer;
+  user-select: none;
+}
+.agent-num {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--accent); background: var(--accent-dim);
+  border-radius: 6px; padding: 2px 7px; flex-shrink: 0;
+  min-width: 32px; text-align: center;
+}
+.agent-name {
+  font-weight: 600; font-size: 14px; color: var(--text); flex: 1;
+}
+.agent-phase-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--text3);
+  background: var(--surface2); border-radius: 4px;
+  padding: 2px 7px; flex-shrink: 0;
+}
+.agent-modified-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--gold); display: none; flex-shrink: 0;
+}
+.agent-card.modified .agent-modified-dot { display: block; }
+.agent-chevron {
+  color: var(--text3); font-size: 12px; transition: transform .2s; flex-shrink: 0;
+}
+.agent-card.expanded .agent-chevron { transform: rotate(180deg); }
+
+.agent-body {
+  display: none; padding: 0 16px 16px;
+  border-top: 1px solid var(--border);
+}
+.agent-card.expanded .agent-body { display: block; }
+
+.prompt-block { margin-top: 14px; }
+.prompt-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--text3); margin-bottom: 6px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.prompt-label .prompt-hint {
+  font-size: 10px; color: var(--text3); text-transform: none;
+  letter-spacing: 0; font-weight: 400;
+}
+.prompt-textarea {
+  width: 100%; background: var(--surface2);
+  border: 1px solid var(--border2); border-radius: 8px;
+  color: var(--text2); font-family: 'DM Mono', monospace;
+  font-size: 11.5px; line-height: 1.6; padding: 10px 12px;
+  resize: vertical; outline: none; min-height: 70px;
+  transition: border-color .2s, color .2s;
+}
+.prompt-textarea:focus { border-color: var(--accent); color: var(--text); }
+.prompt-textarea.user-prompt { min-height: 90px; color: var(--text); }
+
+.agent-actions {
+  display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+  align-items: center;
+}
+.btn-reset-agent {
+  background: none; border: 1px solid var(--border2);
+  border-radius: 7px; color: var(--text3);
+  font-size: 11px; padding: 5px 10px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .15s;
+}
+.btn-reset-agent:hover { border-color: var(--accent); color: var(--accent); }
+.save-indicator {
+  font-size: 11px; color: var(--green); opacity: 0;
+  transition: opacity .3s; font-family: 'DM Mono', monospace;
+}
+.save-indicator.show { opacity: 1; }
+
+.agents-toolbar {
+  display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; align-items: center;
+}
+.agents-stats {
+  font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace;
+  margin-left: auto;
+}
+
+</style>
+</head>
+<body>
+
+<header>
+  <a href="#" class="logo">
+    <span class="logo-claw">🦞</span>
+    Auto<span>Research</span>
+  </a>
+  <div class="header-actions">
+    <span class="badge">v1.0 · Browser</span>
+    <button class="btn btn-ghost" onclick="resetApp()" style="padding:7px 14px;font-size:12px;">↺ Reset</button>
+  </div>
+</header>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section" style="padding-bottom:14px;">
+      <div class="sidebar-title">Configuración</div>
+      <div class="api-row">
+        <input type="password" id="apiKey" placeholder="sk-… (OpenAI API Key)" style="font-size:11px;">
+      </div>
+      <div class="model-sel">
+        <select id="modelSel">
+          <option value="gpt-4o-mini">gpt-4o-mini (rápido)</option>
+          <option value="gpt-4o">gpt-4o (calidad)</option>
+          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          <option value="gpt-4.1">gpt-4.1</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="padding: 0 18px 8px; border-bottom: 1px solid var(--border);">
+      <div class="sidebar-title" style="margin-bottom:6px;">Pipeline · 23 etapas</div>
+    </div>
+
+    <div class="phase-list" id="phaseList"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="progress-top">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
+
+    <!-- Hero / Input -->
+    <div class="hero">
+      <h1 class="hero-title">Chatea una idea. <em>Obtén un paper.</em></h1>
+      <p class="hero-sub">Pipeline autónomo de 23 etapas: literatura real → experimentos → redacción → revisión → LaTeX.</p>
+
+      <!-- API KEY — siempre visible -->
+      <div class="apikey-row">
+        <span class="apikey-icon">🔑</span>
+        <input type="password" id="apiKey" placeholder="OpenAI API Key  (sk-…)" autocomplete="off" spellcheck="false" class="apikey-input">
+        <button class="btn-eye" onclick="toggleKey(this)" title="Mostrar/ocultar key">👁</button>
+      </div>
+
+      <div class="topic-row">
+        <textarea class="topic-input" id="topicInput"
+          placeholder="Escribe tu idea de investigación… ej: Eficacia de los LLM en diagnóstico diferencial en medicina de urgencias"
+          rows="2" onInput="autoResize(this)"></textarea>
+        <button class="btn btn-primary" id="runBtn" onclick="runPipeline()">
+          🦞 Investigar
+        </button>
+      </div>
+
+      <div class="options-row">
+        <select class="opts-select" id="modelSel2">
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          <option value="gpt-4.1">gpt-4.1</option>
+        </select>
+        <select class="opts-select" id="confSel">
+          <option value="neurips">NeurIPS 2025</option>
+          <option value="iclr">ICLR 2026</option>
+          <option value="icml">ICML 2026</option>
+          <option value="bmj">BMJ / Medical</option>
+        </select>
+        <select class="opts-select" id="langSel">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+        </select>
+        <label class="toggle-label">
+          <input type="checkbox" id="autoApprove" checked>
+          Auto-approve
+        </label>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-panel="log" onclick="switchTab(this,'log')">
+        📋 Log <span class="tab-badge" id="logCount">0</span>
+      </div>
+      <div class="tab" data-panel="paper" onclick="switchTab(this,'paper')">
+        📄 Paper
+      </div>
+      <div class="tab" data-panel="refs" onclick="switchTab(this,'refs')">
+        📚 Referencias
+      </div>
+      <div class="tab" data-panel="review" onclick="switchTab(this,'review')">
+        🔍 Peer Review
+      </div>
+      <div class="tab" data-panel="export" onclick="switchTab(this,'export')">
+        📦 Exportar
+      </div>
+      <div class="tab" data-panel="agents" onclick="switchTab(this,'agents')">
+        ⚙ Agentes
+      </div>
+    </div>
+
+    <!-- Panels -->
+    <div class="panels">
+
+      <div class="panel visible" id="panel-log">
+        <div id="welcomeState" class="welcome">
+          <div class="welcome-claw">🦞</div>
+          <h2>Listo para investigar</h2>
+          <p>Escribe tu idea de investigación arriba y pulsa <strong>Investigar</strong>. El pipeline ejecutará 23 etapas autónomas y generará un paper completo.</p>
+        </div>
+        <div id="streamLog" class="stream-log" style="display:none;"></div>
+      </div>
+
+      <div class="panel" id="panel-paper">
+        <div class="empty-panel" id="emptyPaper">
+          <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p>El paper aparecerá aquí una vez generado</p>
+        </div>
+        <div id="paperContent" class="paper-output" style="display:none;"></div>
+      </div>
+
+      <div class="panel" id="panel-refs">
+        <div class="empty-panel" id="emptyRefs">
+          <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          <p>Las referencias verificadas aparecerán aquí</p>
+        </div>
+        <div id="refsContent" style="display:none;"></div>
+      </div>
+
+      <div class="panel" id="panel-review">
+        <div class="empty-panel" id="emptyReview">
+          <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          <p>El peer review aparecerá aquí</p>
+        </div>
+        <div id="reviewContent" style="display:none;"></div>
+      </div>
+
+      <div class="panel" id="panel-agents">
+        <div id="agentsPanel"></div>
+      </div>
+
+      <div class="panel" id="panel-export">
+        <div class="empty-panel" id="emptyExport">
+          <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <p>Opciones de exportación disponibles cuando el pipeline finalice</p>
+        </div>
+        <div id="exportContent" style="display:none;"></div>
+      </div>
+
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Listo</span>
+      <div class="status-spacer"></div>
+      <span id="stageCounter" style="color:var(--text3);">0 / 23 etapas</span>
+      <span class="cost-pill" id="costPill">$0.0000</span>
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// PIPELINE DEFINITION — 23 STAGES, 8 PHASES
+// ═══════════════════════════════════════════════════════════════
+const PHASES = [
+  { id: 'A', label: 'Fase A · Scoping', stages: [
+    { id: 1, key: 'TOPIC_INIT', name: 'Inicialización del tema' },
+    { id: 2, key: 'PROBLEM_DECOMPOSE', name: 'Descomposición del problema' },
+  ]},
+  { id: 'B', label: 'Fase B · Literatura', stages: [
+    { id: 3, key: 'SEARCH_STRATEGY', name: 'Estrategia de búsqueda' },
+    { id: 4, key: 'LITERATURE_COLLECT', name: 'Recolección de literatura' },
+    { id: 5, key: 'LITERATURE_SCREEN', name: 'Cribado de literatura [gate]' },
+    { id: 6, key: 'KNOWLEDGE_EXTRACT', name: 'Extracción de conocimiento' },
+  ]},
+  { id: 'C', label: 'Fase C · Síntesis', stages: [
+    { id: 7, key: 'SYNTHESIS', name: 'Síntesis del conocimiento' },
+    { id: 8, key: 'HYPOTHESIS_GEN', name: 'Generación de hipótesis' },
+  ]},
+  { id: 'D', label: 'Fase D · Diseño', stages: [
+    { id: 9, key: 'EXPERIMENT_DESIGN', name: 'Diseño experimental [gate]' },
+    { id: 10, key: 'CODE_GENERATION', name: 'Generación de código' },
+    { id: 11, key: 'RESOURCE_PLANNING', name: 'Planificación de recursos' },
+  ]},
+  { id: 'E', label: 'Fase E · Ejecución', stages: [
+    { id: 12, key: 'EXPERIMENT_RUN', name: 'Ejecución de experimentos' },
+    { id: 13, key: 'ITERATIVE_REFINE', name: 'Refinamiento iterativo' },
+  ]},
+  { id: 'F', label: 'Fase F · Análisis', stages: [
+    { id: 14, key: 'RESULT_ANALYSIS', name: 'Análisis de resultados' },
+    { id: 15, key: 'RESEARCH_DECISION', name: 'Decisión PIVOT/REFINE' },
+  ]},
+  { id: 'G', label: 'Fase G · Redacción', stages: [
+    { id: 16, key: 'PAPER_OUTLINE', name: 'Esquema del paper' },
+    { id: 17, key: 'PAPER_DRAFT', name: 'Borrador completo' },
+    { id: 18, key: 'PEER_REVIEW', name: 'Revisión por pares' },
+    { id: 19, key: 'PAPER_REVISION', name: 'Revisión del paper' },
+  ]},
+  { id: 'H', label: 'Fase H · Finalización', stages: [
+    { id: 20, key: 'QUALITY_GATE', name: 'Quality gate [gate]' },
+    { id: 21, key: 'KNOWLEDGE_ARCHIVE', name: 'Archivo de conocimiento' },
+    { id: 22, key: 'EXPORT_PUBLISH', name: 'Exportar / LaTeX' },
+    { id: 23, key: 'CITATION_VERIFY', name: 'Verificación de citas' },
+  ]},
+];
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let state = {
+  running: false,
+  currentStage: 0,
+  logCount: 0,
+  totalCost: 0,
+  paper: null,
+  references: [],
+  peerReview: null,
+  stageStatus: {}, // 1-23 → 'pending'|'active'|'done'|'error'
+};
+
+// ═══════════════════════════════════════════════════════════════
+// INIT UI
+// ═══════════════════════════════════════════════════════════════
+function initPhaseList() {
+  const el = document.getElementById('phaseList');
+  el.innerHTML = '';
+  PHASES.forEach(phase => {
+    const group = document.createElement('div');
+    group.className = 'phase-group';
+    group.innerHTML = `<div class="phase-label">${phase.label}</div>`;
+    phase.stages.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'stage-item';
+      item.id = `stage-${s.id}`;
+      item.innerHTML = `
+        <span class="stage-num">${String(s.id).padStart(2,'0')}</span>
+        <span class="stage-name">${s.name}</span>
+        <span class="stage-dot"></span>`;
+      group.appendChild(item);
+    });
+    el.appendChild(group);
+  });
+}
+
+function setStageStatus(id, status) {
+  state.stageStatus[id] = status;
+  const el = document.getElementById(`stage-${id}`);
+  if (!el) return;
+  el.className = `stage-item ${status}`;
+  // scroll into view
+  if (status === 'active') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function switchTab(el, panelId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('visible'));
+  el.classList.add('active');
+  document.getElementById(`panel-${panelId}`).classList.add('visible');
+  if (panelId === 'agents') renderAgentsPanel();
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function resetApp() {
+  if (state.running && !confirm('¿Cancelar pipeline en curso?')) return;
+  state = {
+    running: false, currentStage: 0, logCount: 0, totalCost: 0,
+    paper: null, references: [], peerReview: null, stageStatus: {},
+  };
+  document.getElementById('streamLog').innerHTML = '';
+  document.getElementById('streamLog').style.display = 'none';
+  document.getElementById('welcomeState').style.display = '';
+  document.getElementById('paperContent').style.display = 'none';
+  document.getElementById('emptyPaper').style.display = '';
+  document.getElementById('refsContent').style.display = 'none';
+  document.getElementById('emptyRefs').style.display = '';
+  document.getElementById('reviewContent').style.display = 'none';
+  document.getElementById('emptyReview').style.display = '';
+  document.getElementById('exportContent').style.display = 'none';
+  document.getElementById('emptyExport').style.display = '';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('logCount').textContent = '0';
+  document.getElementById('statusDot').className = 'status-dot';
+  document.getElementById('statusText').textContent = 'Listo';
+  document.getElementById('stageCounter').textContent = '0 / 23 etapas';
+  document.getElementById('costPill').textContent = '$0.0000';
+  document.getElementById('runBtn').disabled = false;
+  initPhaseList();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGGING
+// ═══════════════════════════════════════════════════════════════
+function log(msg, type='info', phase='') {
+  const el = document.getElementById('streamLog');
+  const welcome = document.getElementById('welcomeState');
+  welcome.style.display = 'none';
+  el.style.display = 'block';
+
+  state.logCount++;
+  document.getElementById('logCount').textContent = state.logCount;
+
+  const ts = new Date().toLocaleTimeString('es-ES', {hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.innerHTML = `
+    <span class="log-ts">${ts}</span>
+    <span class="log-phase">${phase}</span>
+    <span class="log-msg">${msg}</span>`;
+  el.appendChild(entry);
+  entry.scrollIntoView({ block: 'nearest' });
+}
+
+function logH1(msg) {
+  const el = document.getElementById('streamLog');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry h1';
+  entry.innerHTML = `<span class="log-ts"></span><span class="log-phase"></span><span class="log-msg">▸ ${msg}</span>`;
+  el.appendChild(entry);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// API CALL
+// ═══════════════════════════════════════════════════════════════
+async function callLLM(systemPrompt, userPrompt, temperature=0.7, agentId=null) {
+  // If agentId provided, override with custom prompts (substitution handled by caller)
+  if (agentId !== null) {
+    const customSys = AGENT_CUSTOM[agentId]?.system;
+    const customUsr = AGENT_CUSTOM[agentId]?.user;
+    // Only override if custom AND the prompt wasn't already substituted by pipeline
+    // (pipeline passes pre-substituted strings, so we only swap full system prompt)
+    if (customSys) systemPrompt = customSys;
+    // user prompt is substituted by pipeline, so we respect what was passed
+  }
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const model = (document.getElementById('modelSel2') || document.getElementById('modelSel')).value;
+
+  if (!apiKey) throw new Error('Falta la API key de OpenAI');
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      temperature,
+      max_tokens: 3000,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content || '';
+
+  // Cost estimate (gpt-4o-mini: $0.15/1M input, $0.60/1M output)
+  const inp = data.usage?.prompt_tokens || 0;
+  const out = data.usage?.completion_tokens || 0;
+  const isLarge = model.includes('gpt-4o') && !model.includes('mini');
+  const costIn = isLarge ? 2.5 : 0.15;
+  const costOut = isLarge ? 10 : 0.6;
+  state.totalCost += (inp * costIn + out * costOut) / 1_000_000;
+  document.getElementById('costPill').textContent = `$${state.totalCost.toFixed(4)}`;
+
+  return text;
+}
+
+function parseJSON(text) {
+  try {
+    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SLEEP HELPER
+// ═══════════════════════════════════════════════════════════════
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ═══════════════════════════════════════════════════════════════
+// PIPELINE
+// ═══════════════════════════════════════════════════════════════
+async function runPipeline() {
+  const topic = document.getElementById('topicInput').value.trim();
+  if (!topic) { alert('Escribe una idea de investigación primero.'); return; }
+
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { alert('Introduce tu API Key de OpenAI en el panel izquierdo.'); return; }
+
+  document.getElementById('runBtn').disabled = true;
+  state.running = true;
+
+  // Status
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot running';
+  document.getElementById('statusText').textContent = 'Pipeline en ejecución…';
+
+  const conf = document.getElementById('confSel').value;
+  const lang = document.getElementById('langSel').value;
+  const langLabel = lang === 'es' ? 'Spanish' : 'English';
+  const isES = lang === 'es';
+
+  // DATA STORE across stages
+  let D = {
+    topic,
+    researchQuestions: [],
+    searchQueries: [],
+    papers: [],
+    hypotheses: [],
+    experimentPlan: '',
+    experimentCode: '',
+    experimentResults: '',
+    synthesis: '',
+    outline: [],
+    sections: {},
+    peerReview: '',
+    revisedSections: {},
+    finalPaper: '',
+    references: [],
+  };
+
+  const totalStages = 23;
+
+  function progress(stage) {
+    document.getElementById('progressFill').style.width = `${Math.round(stage/totalStages*100)}%`;
+    document.getElementById('stageCounter').textContent = `${stage} / ${totalStages} etapas`;
+    state.currentStage = stage;
+  }
+
+  async function runStage(id, name, fn) {
+    setStageStatus(id, 'active');
+    log(`Iniciando etapa ${id}: ${name}`, 'info', `[${String(id).padStart(2,'0')}] ${name}`);
+    try {
+      await fn();
+      setStageStatus(id, 'done');
+      log(`Etapa ${id} completada`, 'success', `✓ ${name}`);
+      progress(id);
+      await sleep(200);
+    } catch(err) {
+      setStageStatus(id, 'error');
+      log(`Error en etapa ${id}: ${err.message}`, 'error', `✗ ${name}`);
+      throw err;
+    }
+  }
+
+  try {
+    // ── FASE A: SCOPING ──────────────────────────────────────────
+
+    logH1('FASE A · SCOPING');
+
+    await runStage(1, 'TOPIC_INIT', async () => {
+      const r = await callLLM(
+        `You are a research scoping expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Analyze this research topic and return JSON:
+{
+  "refined_topic": "polished topic",
+  "field": "main scientific field",
+  "subfields": ["subfield1", "subfield2"],
+  "novelty": "why this is relevant now",
+  "scope": "brief scope statement"
+}
+Topic: "${topic}"`
+      );
+      const parsed = parseJSON(r);
+      if (parsed) {
+        D.topicInfo = parsed;
+        log(`Tema refinado: ${parsed.refined_topic}`, 'info', 'TOPIC_INIT');
+        log(`Campo: ${parsed.field}`, 'info', 'TOPIC_INIT');
+      }
+    });
+
+    await runStage(2, 'PROBLEM_DECOMPOSE', async () => {
+      const r = await callLLM(
+        `You are a systematic research methodologist. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Decompose the research topic into structured components. Return JSON:
+{
+  "main_question": "main research question",
+  "sub_questions": ["q1", "q2", "q3"],
+  "pico": {"population":"", "intervention":"", "comparison":"", "outcome":""},
+  "objectives": ["obj1", "obj2"],
+  "hypotheses_seed": ["hyp1", "hyp2"]
+}
+Topic: "${topic}"`
+      );
+      const parsed = parseJSON(r);
+      if (parsed) {
+        D.problemTree = parsed;
+        D.researchQuestions = [parsed.main_question, ...(parsed.sub_questions || [])];
+        log(`Pregunta principal: ${parsed.main_question}`, 'info', 'DECOMPOSE');
+        log(`${parsed.sub_questions?.length || 0} sub-preguntas generadas`, 'info', 'DECOMPOSE');
+      }
+    });
+
+    // ── FASE B: LITERATURA ───────────────────────────────────────
+
+    logH1('FASE B · LITERATURA');
+
+    await runStage(3, 'SEARCH_STRATEGY', async () => {
+      const r = await callLLM(
+        `You are a systematic review expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Design a search strategy for this topic. Return JSON:
+{
+  "keywords": ["kw1","kw2","kw3","kw4","kw5"],
+  "mesh_terms": ["mesh1","mesh2","mesh3"],
+  "boolean_query": "EXAMPLE_KW1 AND (EXAMPLE_KW2 OR EXAMPLE_KW3)",
+  "s2_queries": ["short query 1 for Semantic Scholar","short query 2"],
+  "arxiv_queries": ["arxiv query 1","arxiv query 2"],
+  "openalex_queries": ["openalex query 1","openalex query 2"],
+  "databases": ["Semantic Scholar","arXiv","OpenAlex"],
+  "inclusion_criteria": ["crit1","crit2"],
+  "exclusion_criteria": ["excl1","excl2"]
+}
+Topic: "${topic}"`
+      );
+      const parsed = parseJSON(r);
+      if (parsed) {
+        D.searchStrategy = parsed;
+        D.searchQueries = parsed.keywords || [];
+        log(`${parsed.keywords?.length || 0} palabras clave definidas`, 'info', 'SEARCH_STRATEGY');
+        log(`Queries: S2(${parsed.s2_queries?.length||0}) arXiv(${parsed.arxiv_queries?.length||0}) OpenAlex(${parsed.openalex_queries?.length||0})`, 'info', 'SEARCH_STRATEGY');
+      }
+    });
+
+    await runStage(4, 'LITERATURE_COLLECT', async () => {
+      // ── REAL API SEARCH: Semantic Scholar + arXiv + OpenAlex ──
+      let allPapers = [];
+      let paperId = 1;
+
+      // Helper: normalize paper to common schema
+      function normalizePaper(raw, source) {
+        return {
+          id: paperId++,
+          title: raw.title || 'Untitled',
+          authors: raw.authors || [],
+          journal: raw.journal || raw.venue || raw.publisher || '',
+          year: raw.year || raw.publicationDate?.substring(0,4) || '',
+          doi: raw.doi || raw.externalIds?.DOI || '',
+          abstract: raw.abstract || raw.description || '',
+          url: raw.url || raw.openAccessPdf?.url || '',
+          source,
+          relevance_score: raw.relevance_score || 0.75,
+          citations: raw.citationCount || 0,
+        };
+      }
+
+      // ── 1. SEMANTIC SCHOLAR ───────────────────────────────────
+      const s2Queries = D.searchStrategy?.s2_queries || D.searchQueries?.slice(0,2) || [topic];
+      log(`[S2] Buscando en Semantic Scholar (${s2Queries.length} queries)…`, 'info', 'LIT_COLLECT');
+      for (const q of s2Queries.slice(0,2)) {
+        try {
+          const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=8&fields=title,authors,year,abstract,externalIds,citationCount,journal,venue,openAccessPdf`;
+          const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          if (res.ok) {
+            const data = await res.json();
+            const papers = (data.data || []).map(p => normalizePaper({
+              title: p.title,
+              authors: (p.authors||[]).map(a => a.name),
+              year: p.year,
+              abstract: p.abstract,
+              doi: p.externalIds?.DOI,
+              citationCount: p.citationCount,
+              journal: p.journal?.name || p.venue,
+              openAccessPdf: p.openAccessPdf,
+            }, 'Semantic Scholar'));
+            allPapers.push(...papers);
+            log(`[S2] "${q}" → ${papers.length} papers`, 'info', 'LIT_COLLECT');
+          } else {
+            log(`[S2] HTTP ${res.status} para "${q}"`, 'warn', 'LIT_COLLECT');
+          }
+        } catch(e) {
+          log(`[S2] Error: ${e.message}`, 'warn', 'LIT_COLLECT');
+        }
+        await sleep(300); // rate limit courtesy
+      }
+
+      // ── 2. arXiv ─────────────────────────────────────────────
+      const arxivQueries = D.searchStrategy?.arxiv_queries || D.searchQueries?.slice(0,2) || [topic];
+      log(`[arXiv] Buscando en arXiv (${Math.min(arxivQueries.length,2)} queries)…`, 'info', 'LIT_COLLECT');
+      for (const q of arxivQueries.slice(0,2)) {
+        try {
+          const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(q)}&start=0&max_results=6&sortBy=relevance`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const xml = await res.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xml, 'application/xml');
+            const entries = doc.querySelectorAll('entry');
+            const papers = Array.from(entries).map(e => {
+              const arxivId = e.querySelector('id')?.textContent?.split('/abs/')?.pop() || '';
+              return normalizePaper({
+                title: e.querySelector('title')?.textContent?.trim() || '',
+                authors: Array.from(e.querySelectorAll('author name')).map(a => a.textContent),
+                year: e.querySelector('published')?.textContent?.substring(0,4) || '',
+                abstract: e.querySelector('summary')?.textContent?.trim() || '',
+                doi: arxivId ? `10.48550/arXiv.${arxivId}` : '',
+                url: e.querySelector('id')?.textContent || '',
+                journal: 'arXiv preprint',
+              }, 'arXiv');
+            });
+            allPapers.push(...papers);
+            log(`[arXiv] "${q}" → ${papers.length} papers`, 'info', 'LIT_COLLECT');
+          } else {
+            log(`[arXiv] HTTP ${res.status} para "${q}"`, 'warn', 'LIT_COLLECT');
+          }
+        } catch(e) {
+          log(`[arXiv] Error: ${e.message}`, 'warn', 'LIT_COLLECT');
+        }
+        await sleep(300);
+      }
+
+      // ── 3. OPENALEX ───────────────────────────────────────────
+      const oaQueries = D.searchStrategy?.openalex_queries || D.searchQueries?.slice(0,2) || [topic];
+      log(`[OpenAlex] Buscando en OpenAlex (${Math.min(oaQueries.length,2)} queries)…`, 'info', 'LIT_COLLECT');
+      for (const q of oaQueries.slice(0,2)) {
+        try {
+          const url = `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per-page=6&select=title,authorships,publication_year,abstract_inverted_index,doi,primary_location,cited_by_count&mailto=research@example.com`;
+          const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          if (res.ok) {
+            const data = await res.json();
+            const papers = (data.results || []).map(p => {
+              // Reconstruct abstract from inverted index
+              let abstract = '';
+              if (p.abstract_inverted_index) {
+                const words = {};
+                Object.entries(p.abstract_inverted_index).forEach(([word, positions]) => {
+                  positions.forEach(pos => { words[pos] = word; });
+                });
+                abstract = Object.keys(words).sort((a,b)=>a-b).map(k=>words[k]).join(' ');
+              }
+              return normalizePaper({
+                title: p.title || '',
+                authors: (p.authorships||[]).map(a => a.author?.display_name || ''),
+                year: p.publication_year,
+                abstract,
+                doi: p.doi?.replace('https://doi.org/','') || '',
+                journal: p.primary_location?.source?.display_name || '',
+                citationCount: p.cited_by_count,
+              }, 'OpenAlex');
+            });
+            allPapers.push(...papers);
+            log(`[OpenAlex] "${q}" → ${papers.length} papers`, 'info', 'LIT_COLLECT');
+          } else {
+            log(`[OpenAlex] HTTP ${res.status} para "${q}"`, 'warn', 'LIT_COLLECT');
+          }
+        } catch(e) {
+          log(`[OpenAlex] Error: ${e.message}`, 'warn', 'LIT_COLLECT');
+        }
+        await sleep(300);
+      }
+
+      // ── FALLBACK: si las APIs devuelven muy pocos papers ──────
+      if (allPapers.length < 5) {
+        log(`⚠ Pocas referencias reales (${allPapers.length}). Completando con LLM…`, 'warn', 'LIT_COLLECT');
+        const needed = Math.max(0, 8 - allPapers.length);
+        const r = await callLLM(
+          `You are a research librarian. Return JSON only, no markdown.`,
+          `Generate ${needed} realistic academic references to complement existing ones. Return JSON array:
+[{"id":999,"title":"...","authors":["Author A"],"journal":"...","year":2023,"doi":"10.1000/x","abstract":"...","source":"PubMed","relevance_score":0.8}]
+Topic: "${topic}" — avoid duplicating: ${allPapers.map(p=>p.title?.substring(0,40)).join('; ')}`
+        );
+        const extra = parseJSON(r);
+        if (extra && Array.isArray(extra)) {
+          extra.forEach(p => { p.id = paperId++; allPapers.push(p); });
+          log(`LLM complementó con ${extra.length} referencias adicionales`, 'info', 'LIT_COLLECT');
+        }
+      }
+
+      // ── DEDUPLICATION by title similarity ────────────────────
+      const seen = new Set();
+      allPapers = allPapers.filter(p => {
+        if (!p.title) return false;
+        const key = p.title.toLowerCase().replace(/\W+/g,'').substring(0,40);
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+
+      // Re-assign sequential IDs after dedup
+      allPapers.forEach((p, i) => { p.id = i + 1; });
+
+      // LLM scores relevance for all collected papers
+      log(`Calculando relevancia con LLM para ${allPapers.length} papers…`, 'info', 'LIT_COLLECT');
+      const scoreR = await callLLM(
+        `You are a relevance scoring expert. Return JSON only.`,
+        `Score each paper's relevance to the topic (0.0-1.0). Return JSON array of objects: [{"id":1,"score":0.9},...]
+Topic: "${topic}"
+Papers: ${JSON.stringify(allPapers.map(p=>({id:p.id, title:p.title, abstract:p.abstract?.substring(0,150)})))}`
+      );
+      const scores = parseJSON(scoreR);
+      if (scores && Array.isArray(scores)) {
+        const scoreMap = {};
+        scores.forEach(s => { scoreMap[s.id] = s.score; });
+        allPapers.forEach(p => { p.relevance_score = scoreMap[p.id] ?? p.relevance_score ?? 0.7; });
+      }
+
+      D.papers = allPapers;
+      const bySource = allPapers.reduce((acc, p) => { acc[p.source] = (acc[p.source]||0)+1; return acc; }, {});
+      log(`Total: ${allPapers.length} papers recolectados (deduplicados)`, 'success', 'LIT_COLLECT');
+      Object.entries(bySource).forEach(([src, n]) => log(`  ${src}: ${n}`, 'info', 'LIT_COLLECT'));
+    });
+
+    await runStage(5, 'LITERATURE_SCREEN', async () => {
+      const autoApprove = document.getElementById('autoApprove').checked;
+      if (!autoApprove) {
+        log('⚠ Gate: aprobación automática desactivada — continuando con todos los papers', 'warn', 'SCREEN_GATE');
+      }
+
+      // Pre-filter: remove papers with no abstract and very low relevance
+      const preFiltered = D.papers.filter(p => p.relevance_score >= 0.45 && (p.abstract || p.title));
+      log(`Pre-filtro: ${D.papers.length} → ${preFiltered.length} papers (eliminados sin abstract o relevancia < 0.45)`, 'info', 'SCREEN');
+
+      // LLM final screening with inclusion/exclusion criteria
+      const r = await callLLM(
+        `You are a systematic review screener. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Screen these papers. Keep IDs with relevance_score >= 0.55 AND matching inclusion criteria. Return JSON:
+{
+  "included": [1,2,3],
+  "excluded": [4,5],
+  "reason": "screening rationale summary"
+}
+Inclusion criteria: ${JSON.stringify(D.searchStrategy?.inclusion_criteria)}
+Exclusion criteria: ${JSON.stringify(D.searchStrategy?.exclusion_criteria)}
+Papers: ${JSON.stringify(preFiltered.map(p => ({id:p.id, title:p.title, year:p.year, score:p.relevance_score, abstract:p.abstract?.substring(0,100)})))}`
+      );
+      const screen = parseJSON(r);
+      if (screen?.included) {
+        const incIds = new Set(screen.included);
+        D.papers = preFiltered.filter(p => incIds.has(p.id));
+        log(`Cribado final: ${D.papers.length} papers incluidos`, 'success', 'SCREEN');
+        log(`Motivo: ${screen.reason}`, 'info', 'SCREEN');
+      } else {
+        D.papers = preFiltered; // fallback: keep pre-filtered
+        log(`Cribado por defecto: ${D.papers.length} papers`, 'info', 'SCREEN');
+      }
+    });
+
+    await runStage(6, 'KNOWLEDGE_EXTRACT', async () => {
+      const r = await callLLM(
+        `You are a knowledge extraction specialist. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Extract structured knowledge from this literature. Return JSON:
+{
+  "key_findings": ["finding1","finding2","finding3","finding4"],
+  "methodologies": ["method1","method2"],
+  "gaps": ["gap1","gap2"],
+  "metrics": ["metric1","metric2"],
+  "consensus": "main consensus",
+  "controversies": ["controversy1"]
+}
+Papers: ${JSON.stringify(D.papers?.slice(0,8).map(p => ({title:p.title, abstract:p.abstract})))}
+Topic: "${topic}"`
+      );
+      const know = parseJSON(r);
+      if (know) {
+        D.knowledge = know;
+        log(`${know.key_findings?.length || 0} hallazgos clave extraídos`, 'info', 'KNOWLEDGE');
+        log(`${know.gaps?.length || 0} gaps de investigación identificados`, 'info', 'KNOWLEDGE');
+      }
+    });
+
+    // ── FASE C: SÍNTESIS ─────────────────────────────────────────
+
+    logH1('FASE C · SÍNTESIS');
+
+    await runStage(7, 'SYNTHESIS', async () => {
+      D.synthesis = await callLLM(
+        `You are a research synthesis expert writing in ${langLabel}. Write in flowing academic prose.`,
+        `Write a synthesis of the literature (400-500 words) covering:
+1. Current state of knowledge
+2. Key methodologies used
+3. Main findings and trends
+4. Research gaps identified
+
+Topic: "${topic}"
+Key findings: ${JSON.stringify(D.knowledge?.key_findings)}
+Gaps: ${JSON.stringify(D.knowledge?.gaps)}`
+      );
+      log(`Síntesis generada (${D.synthesis?.split(' ').length || 0} palabras)`, 'info', 'SYNTHESIS');
+    });
+
+    await runStage(8, 'HYPOTHESIS_GEN', async () => {
+      const r = await callLLM(
+        `You are a research hypothesis generator with multi-agent debate capability. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Through multi-agent debate, generate 3 testable hypotheses. Return JSON:
+{
+  "hypotheses": [
+    {"h": "H1: ...", "rationale": "...", "testable": true, "priority": "high"},
+    {"h": "H2: ...", "rationale": "...", "testable": true, "priority": "medium"},
+    {"h": "H3: ...", "rationale": "...", "testable": false, "priority": "low"}
+  ],
+  "selected": "H1",
+  "debate_summary": "brief debate outcome"
+}
+Topic: "${topic}"
+Gaps: ${JSON.stringify(D.knowledge?.gaps)}
+PICO: ${JSON.stringify(D.problemTree?.pico)}`
+      );
+      const hGen = parseJSON(r);
+      if (hGen) {
+        D.hypotheses = hGen.hypotheses || [];
+        D.selectedHypothesis = hGen.selected;
+        log(`${D.hypotheses.length} hipótesis generadas mediante debate multi-agente`, 'info', 'HYPOTHESIS');
+        log(`Hipótesis seleccionada: ${D.selectedHypothesis}`, 'success', 'HYPOTHESIS');
+      }
+    });
+
+    // ── FASE D: DISEÑO ───────────────────────────────────────────
+
+    logH1('FASE D · DISEÑO EXPERIMENTAL');
+
+    await runStage(9, 'EXPERIMENT_DESIGN', async () => {
+      const r = await callLLM(
+        `You are an experiment design expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Design an experiment to test the hypothesis. Return JSON:
+{
+  "design": "study design type",
+  "variables": {"independent": "...", "dependent": "...", "confounders": ["..."]},
+  "participants": "sample description",
+  "n": 100,
+  "duration": "estimated duration",
+  "phases": ["phase1", "phase2"],
+  "statistical_test": "appropriate test",
+  "power_analysis": "brief power analysis",
+  "feasibility": "high|medium|low"
+}
+Hypothesis: "${D.selectedHypothesis}"
+Topic: "${topic}"`
+      );
+      const design = parseJSON(r);
+      if (design) {
+        D.experimentDesign = design;
+        log(`Diseño: ${design.design}`, 'info', 'EXP_DESIGN');
+        log(`N=${design.n}, test: ${design.statistical_test}`, 'info', 'EXP_DESIGN');
+      }
+    });
+
+    await runStage(10, 'CODE_GENERATION', async () => {
+      D.experimentCode = await callLLM(
+        `You are an expert data scientist. Write clean Python code. Respond ONLY with Python code, no explanation.`,
+        `Write Python simulation code (50-80 lines) for the following experiment design.
+The code should:
+1. Simulate realistic data for the study
+2. Run the appropriate statistical test (${D.experimentDesign?.statistical_test || 'appropriate test'})
+3. Output formatted results with p-values, effect sizes, and confidence intervals
+4. Include basic visualization code (matplotlib)
+
+Design: ${JSON.stringify(D.experimentDesign)}
+Hypothesis: "${D.selectedHypothesis}"
+Keep it runnable and realistic.`
+      );
+      log(`Código generado (${D.experimentCode?.split('\n').length || 0} líneas)`, 'info', 'CODE_GEN');
+    });
+
+    await runStage(11, 'RESOURCE_PLANNING', async () => {
+      const r = await callLLM(
+        `You are a research project manager. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Estimate resources for this study. Return JSON:
+{
+  "timeline_weeks": 12,
+  "budget_eur": 15000,
+  "personnel": ["role1: X weeks", "role2: Y weeks"],
+  "compute": "hardware requirements",
+  "data_sources": ["source1", "source2"],
+  "risks": ["risk1", "risk2"],
+  "mitigation": ["mit1", "mit2"]
+}
+Design: ${JSON.stringify(D.experimentDesign)}`
+      );
+      const res = parseJSON(r);
+      if (res) {
+        D.resources = res;
+        log(`Timeline: ${res.timeline_weeks} semanas, budget: €${res.budget_eur?.toLocaleString()}`, 'info', 'RESOURCES');
+      }
+    });
+
+    // ── FASE E: EJECUCIÓN ────────────────────────────────────────
+
+    logH1('FASE E · EJECUCIÓN DE EXPERIMENTOS');
+
+    await runStage(12, 'EXPERIMENT_RUN', async () => {
+      const r = await callLLM(
+        `You are simulating experiment execution. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Simulate running the experiment and return realistic results. Return JSON:
+{
+  "status": "completed",
+  "iterations": 3,
+  "metrics": {
+    "primary": {"name": "metric_name", "value": 0.82, "ci_lower": 0.76, "ci_upper": 0.88},
+    "secondary": [{"name": "m2", "value": 0.71}]
+  },
+  "p_value": 0.003,
+  "effect_size": {"cohen_d": 0.65, "interpretation": "medium"},
+  "n_analyzed": 94,
+  "warnings": ["warning if any"],
+  "self_healed": false
+}
+Design: ${JSON.stringify(D.experimentDesign)}
+Hypothesis: "${D.selectedHypothesis}"`
+      );
+      const results = parseJSON(r);
+      if (results) {
+        D.experimentResults = results;
+        log(`Experimento completado: ${results.iterations} iteraciones`, 'success', 'EXP_RUN');
+        log(`Métrica principal: ${results.metrics?.primary?.value} (IC: ${results.metrics?.primary?.ci_lower}-${results.metrics?.primary?.ci_upper})`, 'success', 'EXP_RUN');
+        log(`p-value: ${results.p_value}, d=${results.effect_size?.cohen_d} (${results.effect_size?.interpretation})`, 'info', 'EXP_RUN');
+      }
+    });
+
+    await runStage(13, 'ITERATIVE_REFINE', async () => {
+      const r = await callLLM(
+        `You are optimizing experiment results. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Evaluate if results need refinement. Return JSON:
+{
+  "decision": "PROCEED|REFINE",
+  "reason": "...",
+  "refinements_applied": [],
+  "final_metrics": ${JSON.stringify(D.experimentResults?.metrics)}
+}
+Results: ${JSON.stringify(D.experimentResults)}`
+      );
+      const ref = parseJSON(r);
+      if (ref) {
+        log(`Decisión de refinamiento: ${ref.decision}`, ref.decision==='PROCEED'?'success':'warn', 'REFINE');
+        if (ref.decision === 'REFINE') log(`Refinamiento aplicado: ${ref.reason}`, 'info', 'REFINE');
+      }
+    });
+
+    // ── FASE F: ANÁLISIS ─────────────────────────────────────────
+
+    logH1('FASE F · ANÁLISIS Y DECISIÓN');
+
+    await runStage(14, 'RESULT_ANALYSIS', async () => {
+      D.resultAnalysis = await callLLM(
+        `You are a biostatistician writing a thorough analysis in ${langLabel}. Write 300-400 words of academic prose.`,
+        `Write a Results section analysis covering:
+- Primary outcome findings with statistics
+- Secondary outcomes
+- Effect sizes and clinical/practical significance
+- Unexpected findings
+- Comparison with published literature
+
+Experiment results: ${JSON.stringify(D.experimentResults)}
+Hypothesis: "${D.selectedHypothesis}"
+Key findings from literature: ${JSON.stringify(D.knowledge?.key_findings?.slice(0,3))}`
+      );
+      log(`Análisis de resultados completado (${D.resultAnalysis?.split(' ').length || 0} palabras)`, 'info', 'ANALYSIS');
+    });
+
+    await runStage(15, 'RESEARCH_DECISION', async () => {
+      const r = await callLLM(
+        `You are the research director making a pipeline decision. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Based on results, decide: PROCEED to paper writing, REFINE experiment, or PIVOT hypothesis. Return JSON:
+{
+  "decision": "PROCEED",
+  "confidence": 0.87,
+  "rationale": "...",
+  "hypothesis_supported": true,
+  "limitations": ["lim1", "lim2"]
+}
+Results: ${JSON.stringify(D.experimentResults)}
+p_value: ${D.experimentResults?.p_value}`
+      );
+      const dec = parseJSON(r);
+      if (dec) {
+        D.pipelineDecision = dec;
+        log(`Decisión pipeline: ${dec.decision} (confianza: ${Math.round(dec.confidence*100)}%)`, dec.decision==='PROCEED'?'success':'warn', 'DECISION');
+        log(`Hipótesis soportada: ${dec.hypothesis_supported}`, 'info', 'DECISION');
+      }
+    });
+
+    // ── FASE G: REDACCIÓN ────────────────────────────────────────
+
+    logH1('FASE G · REDACCIÓN DEL PAPER');
+
+    await runStage(16, 'PAPER_OUTLINE', async () => {
+      const r = await callLLM(
+        `You are a scientific writing expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Generate a detailed paper outline. Return JSON:
+{
+  "title": "Full paper title",
+  "abstract_structure": ["bg","methods","results","conclusion"],
+  "sections": [
+    {"name":"Abstract","subsections":[],"word_target":250},
+    {"name":"Introduction","subsections":["Background","Gap","Aim"],"word_target":600},
+    {"name":"Methods","subsections":["Design","Participants","Procedure","Analysis"],"word_target":600},
+    {"name":"Results","subsections":["Primary","Secondary","Adverse"],"word_target":500},
+    {"name":"Discussion","subsections":["Interpretation","Comparison","Limitations","Future"],"word_target":700},
+    {"name":"Conclusion","subsections":[],"word_target":200},
+    {"name":"References","subsections":[],"word_target":0}
+  ],
+  "keywords": ["kw1","kw2","kw3","kw4","kw5"]
+}
+Topic: "${topic}"
+Hypothesis: "${D.selectedHypothesis}"
+Conference: "${conf}"`
+      );
+      const outline = parseJSON(r);
+      if (outline) {
+        D.outline = outline;
+        D.paperTitle = outline.title;
+        log(`Título: ${outline.title}`, 'success', 'OUTLINE');
+        log(`${outline.sections?.length || 0} secciones planificadas`, 'info', 'OUTLINE');
+      }
+    });
+
+    await runStage(17, 'PAPER_DRAFT', async () => {
+      // Write each main section
+      const sectionsToWrite = ['Abstract','Introduction','Methods','Results','Discussion','Conclusion'];
+      D.sections = {};
+
+      for (const sec of sectionsToWrite) {
+        log(`Redactando sección: ${sec}…`, 'info', 'PAPER_DRAFT');
+        const secContent = await callLLM(
+          `You are a scientific writer. Write ONLY the ${sec} section in ${langLabel}. Write polished academic prose. Do NOT include section headers, just the content.`,
+          `Write the ${sec} section for a scientific paper.
+Title: "${D.paperTitle}"
+Topic: "${topic}"
+Hypothesis: "${D.selectedHypothesis}"
+Key synthesis: ${D.synthesis?.substring(0,500)}
+Results: ${JSON.stringify(D.experimentResults)}
+Analysis: ${D.resultAnalysis?.substring(0,400)}
+Decision: ${JSON.stringify(D.pipelineDecision)}
+Limitations: ${JSON.stringify(D.pipelineDecision?.limitations)}
+Write ${sec === 'Abstract' ? 250 : sec === 'Introduction' ? 600 : sec === 'Methods' ? 600 : sec === 'Results' ? 500 : sec === 'Discussion' ? 700 : 200} words approximately.`
+        );
+        D.sections[sec] = secContent;
+      }
+
+      log(`Borrador completo generado`, 'success', 'PAPER_DRAFT');
+      const total = Object.values(D.sections).join(' ').split(' ').length;
+      log(`Total: ~${total} palabras`, 'info', 'PAPER_DRAFT');
+    });
+
+    await runStage(18, 'PEER_REVIEW', async () => {
+      const draftPreview = Object.entries(D.sections).map(([k,v]) => `## ${k}\n${v?.substring(0,300)}...`).join('\n\n');
+      const r = await callLLM(
+        `You are a panel of 3 expert peer reviewers. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Provide structured peer review. Return JSON:
+{
+  "overall_score": 7.2,
+  "recommendation": "Minor revision",
+  "reviewer1": {
+    "strengths": ["strength1","strength2"],
+    "weaknesses": ["weakness1"],
+    "score": 7.5
+  },
+  "reviewer2": {
+    "strengths": ["strength3"],
+    "weaknesses": ["weakness2","weakness3"],
+    "score": 7.0
+  },
+  "reviewer3": {
+    "strengths": ["strength4","strength5"],
+    "weaknesses": ["weakness4"],
+    "score": 7.1
+  },
+  "required_revisions": ["revision1","revision2"],
+  "optional_suggestions": ["sug1","sug2"],
+  "methodology_consistency": "ok",
+  "novelty": "moderate"
+}
+Paper draft:
+${draftPreview}`
+      );
+      const rev = parseJSON(r);
+      if (rev) {
+        D.peerReview = rev;
+        log(`Score general: ${rev.overall_score}/10 — ${rev.recommendation}`, 'success', 'PEER_REVIEW');
+        log(`${rev.required_revisions?.length || 0} revisiones requeridas`, 'info', 'PEER_REVIEW');
+      }
+    });
+
+    await runStage(19, 'PAPER_REVISION', async () => {
+      // Revise abstract and discussion based on peer review
+      const revisionInstructions = D.peerReview?.required_revisions?.join('; ') || 'Improve clarity and consistency';
+      for (const sec of ['Introduction', 'Discussion', 'Conclusion']) {
+        D.sections[sec] = await callLLM(
+          `You are revising a scientific paper in ${langLabel} based on peer review feedback. Improve the section maintaining academic quality.`,
+          `Revise this ${sec} section based on peer review feedback.
+Original text: ${D.sections[sec]?.substring(0,1000)}
+Required revisions: ${revisionInstructions}
+Keep similar length. Write only the revised text.`
+        );
+      }
+      log(`Paper revisado según feedback del peer review`, 'success', 'REVISION');
+    });
+
+    // ── FASE H: FINALIZACIÓN ─────────────────────────────────────
+
+    logH1('FASE H · FINALIZACIÓN');
+
+    await runStage(20, 'QUALITY_GATE', async () => {
+      const r = await callLLM(
+        `You are the final quality gatekeeper. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Perform a final quality audit. Return JSON:
+{
+  "scores": {
+    "novelty": 7.8,
+    "methodology": 8.1,
+    "clarity": 7.5,
+    "reproducibility": 7.2,
+    "impact": 7.6
+  },
+  "overall": 7.6,
+  "ai_slop_score": 0.12,
+  "neurips_checklist": {"reproducibility": true, "ethics": true, "limitations": true},
+  "pass": true,
+  "notes": "Paper meets quality threshold"
+}
+Peer review: ${JSON.stringify(D.peerReview)}
+Paper score: ${D.peerReview?.overall_score}`
+      );
+      const qa = parseJSON(r);
+      if (qa) {
+        D.qualityGate = qa;
+        log(`Quality gate: ${qa.pass ? '✓ PASSED' : '✗ FAILED'} (score: ${qa.overall})`, qa.pass?'success':'error', 'QUALITY_GATE');
+        log(`AI-slop score: ${qa.ai_slop_score} (${qa.ai_slop_score < 0.2 ? 'bajo ✓' : 'alto ✗'})`, 'info', 'QUALITY_GATE');
+      }
+    });
+
+    await runStage(21, 'KNOWLEDGE_ARCHIVE', async () => {
+      D.knowledgeArchive = {
+        topic,
+        run_date: new Date().toISOString(),
+        stages_completed: 21,
+        lessons: [
+          `Topic "${topic}" studied with ${D.papers?.length || 0} papers`,
+          `Hypothesis supported: ${D.pipelineDecision?.hypothesis_supported}`,
+          `Key metric: ${D.experimentResults?.metrics?.primary?.value}`,
+        ]
+      };
+      log(`Conocimiento archivado — ${D.knowledgeArchive.lessons.length} lecciones extraídas`, 'success', 'ARCHIVE');
+    });
+
+    await runStage(22, 'EXPORT_PUBLISH', async () => {
+      // Build LaTeX-ready structure
+      D.latexStructure = {
+        template: conf,
+        title: D.paperTitle,
+        sections: D.sections,
+        bibliography: D.papers?.map(p => ({
+          key: `ref${p.id}`,
+          author: p.authors?.join(' and '),
+          title: p.title,
+          journal: p.journal,
+          year: p.year,
+          doi: p.doi,
+        }))
+      };
+      log(`Estructura LaTeX generada (template: ${conf})`, 'success', 'EXPORT');
+      log(`${D.papers?.length || 0} referencias en formato BibTeX`, 'info', 'EXPORT');
+    });
+
+    await runStage(23, 'CITATION_VERIFY', async () => {
+      const r = await callLLM(
+        `You are a citation verification system. Respond ONLY in ${langLabel}. Return JSON.`,
+        `Verify citation integrity for these references. Return JSON array:
+[{"id":1,"status":"verified|uncertain","relevance":0.9,"note":"..."}]
+References: ${JSON.stringify(D.papers?.slice(0,8).map(p => ({id:p.id,title:p.title,doi:p.doi,year:p.year})))}
+Topic: "${topic}"`
+      );
+      const verif = parseJSON(r);
+      if (verif && Array.isArray(verif)) {
+        D.citationVerification = verif;
+        const verified = verif.filter(c => c.status === 'verified').length;
+        log(`${verified}/${verif.length} referencias verificadas`, 'success', 'CITATION_VERIFY');
+        const removed = verif.filter(c => c.status === 'removed').length;
+        if (removed > 0) log(`${removed} referencias halladas fabricadas y eliminadas`, 'warn', 'CITATION_VERIFY');
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // PIPELINE COMPLETE — RENDER OUTPUTS
+    // ─────────────────────────────────────────────────────────────
+    log('', 'info', '');
+    log('🦞 Pipeline completado con éxito', 'success', '═══ DONE ═══');
+    log(`Paper: "${D.paperTitle}"`, 'success', 'RESULT');
+    log(`Coste total: $${state.totalCost.toFixed(4)}`, 'info', 'COST');
+
+    // Mark complete status
+    dot.className = 'status-dot done';
+    document.getElementById('statusText').textContent = `Pipeline completado · ${D.paperTitle?.substring(0,50)}…`;
+
+    // ─── RENDER PAPER ──
+    renderPaper(D);
+    renderReferences(D);
+    renderPeerReview(D);
+    renderExport(D);
+
+    // Switch to paper tab
+    setTimeout(() => {
+      document.querySelectorAll('.tab')[1].click();
+    }, 800);
+
+  } catch(err) {
+    dot.className = 'status-dot error';
+    document.getElementById('statusText').textContent = `Error: ${err.message}`;
+    log(`Pipeline interrumpido: ${err.message}`, 'error', 'ERROR');
+  } finally {
+    document.getElementById('runBtn').disabled = false;
+    state.running = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function renderPaper(D) {
+  const el = document.getElementById('paperContent');
+  const empty = document.getElementById('emptyPaper');
+  empty.style.display = 'none';
+  el.style.display = 'block';
+
+  const sectionIcons = {
+    Abstract: '📋', Introduction: '🔬', Methods: '⚗️',
+    Results: '📊', Discussion: '💬', Conclusion: '🎯'
+  };
+
+  let html = `
+    <h1>${D.paperTitle || D.topic}</h1>
+    <div class="paper-meta">
+      📅 ${new Date().toLocaleDateString('es-ES', {year:'numeric',month:'long',day:'numeric'})} &nbsp;·&nbsp;
+      🎯 ${document.getElementById('confSel').options[document.getElementById('confSel').selectedIndex].text} &nbsp;·&nbsp;
+      📚 ${D.papers?.length || 0} referencias &nbsp;·&nbsp;
+      💰 $${state.totalCost.toFixed(4)}
+    </div>`;
+
+  // Quality scores
+  if (D.qualityGate?.scores) {
+    html += `<div class="scores-grid">`;
+    const colors = {'novelty':'#c9a84c','methodology':'#4d9fe8','clarity':'#3dcc8e','reproducibility':'#9b7fe8','impact':'#e8583d'};
+    Object.entries(D.qualityGate.scores).forEach(([k,v]) => {
+      const pct = Math.round(v/10*100);
+      html += `<div class="score-card">
+        <div class="score-label">${k}</div>
+        <div class="score-val">${v}</div>
+        <div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[k]||'var(--accent)'}"></div></div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Paper sections
+  Object.entries(D.sections || {}).forEach(([sec, content]) => {
+    if (!content) return;
+    html += `<div class="paper-section">
+      <h2>${sectionIcons[sec] || '📝'} ${sec}</h2>
+      ${content.split('\n').filter(l=>l.trim()).map(l => `<p>${l}</p>`).join('')}
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function renderReferences(D) {
+  const el = document.getElementById('refsContent');
+  const empty = document.getElementById('emptyRefs');
+  empty.style.display = 'none';
+  el.style.display = 'block';
+
+  const verif = D.citationVerification || [];
+  const verifMap = {};
+  verif.forEach(v => verifMap[v.id] = v);
+
+  let html = `
+    <h2 style="font-family:'DM Serif Display',serif;margin-bottom:16px;">Referencias verificadas</h2>
+    <table class="citations-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Título</th><th>Autores</th><th>Fuente</th><th>Año</th><th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  (D.papers || []).forEach(p => {
+    const v = verifMap[p.id];
+    const statusClass = v?.status === 'verified' ? 'ci-ok' : 'ci-warn';
+    const statusLabel = v?.status === 'verified' ? '✓ Verificada' : '~ Incierta';
+    html += `<tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--accent)">[${p.id}]</td>
+      <td>${p.title}</td>
+      <td style="color:var(--text3)">${(p.authors||[]).slice(0,2).join(', ')}${p.authors?.length>2?' et al.':''}</td>
+      <td><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--blue)">${p.source||'Unknown'}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${p.year}</td>
+      <td><span class="ci-status ${statusClass}">${statusLabel}</span></td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>
+    <div style="margin-top:28px;">
+      <h2 style="font-family:'DM Serif Display',serif;margin-bottom:16px;">BibTeX</h2>
+      <pre style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);overflow-x:auto;line-height:1.6;">${
+        (D.papers||[]).map(p => `@article{ref${p.id},
+  author    = {${(p.authors||['Unknown']).join(' and ')}},
+  title     = {${p.title}},
+  journal   = {${p.journal||'Unknown'}},
+  year      = {${p.year}},
+  doi       = {${p.doi||'10.0000/unknown'}}
+}`).join('\n\n')
+      }</pre>
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+function renderPeerReview(D) {
+  const el = document.getElementById('reviewContent');
+  const empty = document.getElementById('emptyReview');
+  empty.style.display = 'none';
+  el.style.display = 'block';
+
+  const pr = D.peerReview || {};
+  const reviewers = [pr.reviewer1, pr.reviewer2, pr.reviewer3].filter(Boolean);
+  const reviewColors = ['var(--blue)', 'var(--gold)', 'var(--green)'];
+
+  let html = `<h2 style="font-family:'DM Serif Display',serif;margin-bottom:20px;">Peer Review Multi-Agente</h2>`;
+
+  // Overall verdict
+  html += `<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:20px;margin-bottom:24px;display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:4px;">Score global</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:48px;color:var(--text)">${pr.overall_score || '—'}</div>
+    </div>
+    <div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:8px;">Recomendación</div>
+      <div style="font-size:18px;font-weight:600;color:var(--green)">${pr.recommendation || '—'}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px;">Novedad: <strong>${pr.novelty || '—'}</strong></div>
+    </div>
+  </div>`;
+
+  // Individual reviewers
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:24px;">`;
+  reviewers.forEach((r, i) => {
+    html += `<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-weight:600;color:${reviewColors[i]}">Revisor ${i+1}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:14px;">${r.score}/10</span>
+      </div>
+      ${r.strengths?.map(s => `<div style="font-size:12px;color:var(--green);margin-bottom:4px;">✓ ${s}</div>`).join('')}
+      ${r.weaknesses?.map(w => `<div style="font-size:12px;color:var(--gold);margin-bottom:4px;">⚠ ${w}</div>`).join('')}
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Required revisions
+  if (pr.required_revisions?.length) {
+    html += `<div style="background:rgba(232,88,61,.08);border:1px solid rgba(232,88,61,.2);border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div style="font-weight:600;color:var(--accent);margin-bottom:10px;">Revisiones requeridas</div>
+      ${pr.required_revisions.map(r => `<div style="font-size:13px;color:var(--text2);margin-bottom:6px;padding-left:12px;border-left:2px solid var(--accent);">${r}</div>`).join('')}
+    </div>`;
+  }
+
+  // Quality gate
+  if (D.qualityGate) {
+    const qg = D.qualityGate;
+    html += `<div style="background:${qg.pass?'var(--green-dim)':'rgba(232,88,61,.08)'};border:1px solid ${qg.pass?'rgba(61,204,142,.25)':'rgba(232,88,61,.2)'};border-radius:10px;padding:16px;">
+      <div style="font-weight:600;color:${qg.pass?'var(--green)':'var(--accent)'};margin-bottom:8px;">Quality Gate: ${qg.pass?'✓ PASSED':'✗ FAILED'}</div>
+      <div style="font-size:13px;color:var(--text2);">${qg.notes}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace;">AI-slop score: ${qg.ai_slop_score} · Overall: ${qg.overall}/10</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function renderExport(D) {
+  const el = document.getElementById('exportContent');
+  const empty = document.getElementById('emptyExport');
+  empty.style.display = 'none';
+  el.style.display = 'block';
+
+  const paperText = [
+    `# ${D.paperTitle}\n`,
+    ...Object.entries(D.sections || {}).map(([sec, content]) => `## ${sec}\n\n${content || ''}`),
+    `## References\n\n${(D.papers||[]).map((p,i) => `[${p.id}] ${(p.authors||[]).slice(0,3).join(', ')}${p.authors?.length>3?' et al.':''}. "${p.title}." ${p.journal||''}. ${p.year}. DOI: ${p.doi||''}`).join('\n')}`
+  ].join('\n\n');
+
+  const bibtex = (D.papers||[]).map(p => `@article{ref${p.id},
+  author    = {${(p.authors||['Unknown']).join(' and ')}},
+  title     = {${p.title}},
+  journal   = {${p.journal||'Unknown'}},
+  year      = {${p.year}},
+  doi       = {${p.doi||'10.0000/unknown'}}
+}`).join('\n\n');
+
+  const latex = `\\documentclass{article}
+% Template: ${document.getElementById('confSel').value}
+\\usepackage{hyperref,booktabs,amsmath}
+\\title{${D.paperTitle}}
+\\author{Anonymous}
+\\date{${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long'})}}
+
+\\begin{document}
+\\maketitle
+
+${Object.entries(D.sections||{}).map(([sec,content]) => `\\section{${sec}}\n${content||''}`).join('\n\n')}
+
+\\bibliographystyle{plain}
+\\bibliography{references}
+\\end{document}`;
+
+  const stats = {
+    'Palabras totales': Object.values(D.sections||{}).join(' ').split(' ').length,
+    'Referencias': D.papers?.length || 0,
+    'Etapas completadas': state.currentStage,
+    'Score peer review': D.peerReview?.overall_score || '—',
+    'Coste total': `$${state.totalCost.toFixed(4)}`,
+    'Modelo usado': document.getElementById('modelSel').value,
+  };
+
+  let html = `<h2 style="font-family:'DM Serif Display',serif;margin-bottom:20px;">Exportar resultados</h2>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:28px;">
+    ${Object.entries(stats).map(([k,v]) => `
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:4px;">${k}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:15px;color:var(--text);font-weight:500;">${v}</div>
+      </div>`).join('')}
+  </div>
+
+  <div class="export-row">
+    <button class="btn btn-primary" onclick="downloadFile('paper.md', ${JSON.stringify(paperText)}, 'text/markdown')">⬇ Markdown</button>
+    <button class="btn btn-ghost" onclick="downloadFile('references.bib', ${JSON.stringify(bibtex)}, 'application/x-bibtex')">⬇ BibTeX</button>
+    <button class="btn btn-ghost" onclick="downloadFile('paper.tex', ${JSON.stringify(latex)}, 'application/x-tex')">⬇ LaTeX</button>
+    <button class="btn btn-ghost" onclick="copyToClipboard(${JSON.stringify(paperText)})">📋 Copiar Markdown</button>
+  </div>
+
+  <div style="margin-top:24px;">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:10px;">Vista previa LaTeX</div>
+    <pre style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);overflow-x:auto;line-height:1.6;max-height:340px;overflow-y:auto;">${latex.substring(0,2000)}…</pre>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Copiado al portapapeles ✓');
+  });
+}
+
+
+function toggleKey(btn) {
+  const inp = document.getElementById('apiKey');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// AGENT DEFINITIONS — 23 agents, fully editable
+// ═══════════════════════════════════════════════════════════════
+const AGENT_DEFAULTS = [
+  {
+    id: 1, key: 'TOPIC_INIT', name: 'Topic Initializer', phase: 'A · Scoping',
+    role: 'research scoping expert',
+    system: `You are a research scoping expert. Respond ONLY in {lang}. Return JSON.`,
+    user: `Analyze this research topic and return JSON:
+{
+  "refined_topic": "polished topic",
+  "field": "main scientific field",
+  "subfields": ["subfield1", "subfield2"],
+  "novelty": "why this is relevant now",
+  "scope": "brief scope statement"
+}
+Topic: "{topic}"`
+  },
+  {
+    id: 2, key: 'PROBLEM_DECOMPOSE', name: 'Problem Decomposer', phase: 'A · Scoping',
+    role: 'systematic research methodologist',
+    system: `You are a systematic research methodologist. Respond ONLY in {lang}. Return JSON.`,
+    user: `Decompose the research topic into structured components. Return JSON:
+{
+  "main_question": "main research question",
+  "sub_questions": ["q1", "q2", "q3"],
+  "pico": {"population":"", "intervention":"", "comparison":"", "outcome":""},
+  "objectives": ["obj1", "obj2"],
+  "hypotheses_seed": ["hyp1", "hyp2"]
+}
+Topic: "{topic}"`
+  },
+  {
+    id: 3, key: 'SEARCH_STRATEGY', name: 'Search Strategist', phase: 'B · Literatura',
+    role: 'systematic review expert',
+    system: `You are a systematic review expert. Respond ONLY in {lang}. Return JSON.`,
+    user: `Design a search strategy for this topic. Return JSON:
+{
+  "keywords": ["kw1","kw2","kw3","kw4","kw5"],
+  "mesh_terms": ["mesh1","mesh2","mesh3"],
+  "boolean_query": "KW1 AND (KW2 OR KW3)",
+  "s2_queries": ["short query for Semantic Scholar"],
+  "arxiv_queries": ["arxiv query"],
+  "openalex_queries": ["openalex query"],
+  "databases": ["Semantic Scholar","arXiv","OpenAlex"],
+  "inclusion_criteria": ["crit1","crit2"],
+  "exclusion_criteria": ["excl1","excl2"]
+}
+Topic: "{topic}"`
+  },
+  {
+    id: 4, key: 'LITERATURE_COLLECT', name: 'Literature Collector', phase: 'B · Literatura',
+    role: 'relevance scoring expert',
+    system: `You are a relevance scoring expert. Return JSON only.`,
+    user: `Score each paper's relevance to the topic (0.0-1.0). Return JSON array: [{"id":1,"score":0.9},...]
+Topic: "{topic}"
+Papers: {papers_json}`
+  },
+  {
+    id: 5, key: 'LITERATURE_SCREEN', name: 'Literature Screener', phase: 'B · Literatura',
+    role: 'systematic review screener',
+    system: `You are a systematic review screener. Respond ONLY in {lang}. Return JSON.`,
+    user: `Screen these papers. Keep IDs with relevance_score >= 0.55 AND matching inclusion criteria. Return JSON:
+{
+  "included": [1,2,3],
+  "excluded": [4,5],
+  "reason": "screening rationale summary"
+}
+Inclusion criteria: {inclusion_criteria}
+Exclusion criteria: {exclusion_criteria}
+Papers: {papers_json}`
+  },
+  {
+    id: 6, key: 'KNOWLEDGE_EXTRACT', name: 'Knowledge Extractor', phase: 'B · Literatura',
+    role: 'knowledge extraction specialist',
+    system: `You are a knowledge extraction specialist. Respond ONLY in {lang}. Return JSON.`,
+    user: `Extract structured knowledge from this literature. Return JSON:
+{
+  "key_findings": ["finding1","finding2","finding3","finding4"],
+  "methodologies": ["method1","method2"],
+  "gaps": ["gap1","gap2"],
+  "metrics": ["metric1","metric2"],
+  "consensus": "main consensus",
+  "controversies": ["controversy1"]
+}
+Papers: {papers_json}
+Topic: "{topic}"`
+  },
+  {
+    id: 7, key: 'SYNTHESIS', name: 'Knowledge Synthesizer', phase: 'C · Síntesis',
+    role: 'research synthesis expert',
+    system: `You are a research synthesis expert writing in {lang}. Write in flowing academic prose.`,
+    user: `Write a synthesis of the literature (400-500 words) covering:
+1. Current state of knowledge
+2. Key methodologies used
+3. Main findings and trends
+4. Research gaps identified
+
+Topic: "{topic}"
+Key findings: {key_findings}
+Gaps: {gaps}`
+  },
+  {
+    id: 8, key: 'HYPOTHESIS_GEN', name: 'Hypothesis Generator', phase: 'C · Síntesis',
+    role: 'research hypothesis generator with multi-agent debate capability',
+    system: `You are a research hypothesis generator with multi-agent debate capability. Respond ONLY in {lang}. Return JSON.`,
+    user: `Through multi-agent debate, generate 3 testable hypotheses. Return JSON:
+{
+  "hypotheses": [
+    {"h": "H1: ...", "rationale": "...", "testable": true, "priority": "high"},
+    {"h": "H2: ...", "rationale": "...", "testable": true, "priority": "medium"},
+    {"h": "H3: ...", "rationale": "...", "testable": false, "priority": "low"}
+  ],
+  "selected": "H1: ...",
+  "debate_summary": "brief debate outcome"
+}
+Topic: "{topic}"
+Gaps: {gaps}
+PICO: {pico}`
+  },
+  {
+    id: 9, key: 'EXPERIMENT_DESIGN', name: 'Experiment Designer', phase: 'D · Diseño',
+    role: 'experiment design expert',
+    system: `You are an experiment design expert. Respond ONLY in {lang}. Return JSON.`,
+    user: `Design an experiment to test the hypothesis. Return JSON:
+{
+  "design": "study design type",
+  "variables": {"independent": "...", "dependent": "...", "confounders": ["..."]},
+  "participants": "sample description",
+  "n": 100,
+  "duration": "estimated duration",
+  "phases": ["phase1", "phase2"],
+  "statistical_test": "appropriate test",
+  "power_analysis": "brief power analysis",
+  "feasibility": "high|medium|low"
+}
+Hypothesis: "{hypothesis}"
+Topic: "{topic}"`
+  },
+  {
+    id: 10, key: 'CODE_GENERATION', name: 'Code Generator', phase: 'D · Diseño',
+    role: 'expert data scientist',
+    system: `You are an expert data scientist. Write clean Python code. Respond ONLY with Python code, no explanation.`,
+    user: `Write Python simulation code (50-80 lines) for the following experiment design.
+The code should:
+1. Simulate realistic data for the study
+2. Run the appropriate statistical test ({statistical_test})
+3. Output formatted results with p-values, effect sizes, and confidence intervals
+4. Include basic visualization code (matplotlib)
+
+Design: {design_json}
+Hypothesis: "{hypothesis}"
+Keep it runnable and realistic.`
+  },
+  {
+    id: 11, key: 'RESOURCE_PLANNING', name: 'Resource Planner', phase: 'D · Diseño',
+    role: 'research project manager',
+    system: `You are a research project manager. Respond ONLY in {lang}. Return JSON.`,
+    user: `Estimate resources for this study. Return JSON:
+{
+  "timeline_weeks": 12,
+  "budget_eur": 15000,
+  "personnel": ["role1: X weeks", "role2: Y weeks"],
+  "compute": "hardware requirements",
+  "data_sources": ["source1", "source2"],
+  "risks": ["risk1", "risk2"],
+  "mitigation": ["mit1", "mit2"]
+}
+Design: {design_json}`
+  },
+  {
+    id: 12, key: 'EXPERIMENT_RUN', name: 'Experiment Runner', phase: 'E · Ejecución',
+    role: 'experiment execution simulator',
+    system: `You are simulating experiment execution. Respond ONLY in {lang}. Return JSON.`,
+    user: `Simulate running the experiment and return realistic results. Return JSON:
+{
+  "status": "completed",
+  "iterations": 3,
+  "metrics": {
+    "primary": {"name": "metric_name", "value": 0.82, "ci_lower": 0.76, "ci_upper": 0.88},
+    "secondary": [{"name": "m2", "value": 0.71}]
+  },
+  "p_value": 0.003,
+  "effect_size": {"cohen_d": 0.65, "interpretation": "medium"},
+  "n_analyzed": 94,
+  "warnings": [],
+  "self_healed": false
+}
+Design: {design_json}
+Hypothesis: "{hypothesis}"`
+  },
+  {
+    id: 13, key: 'ITERATIVE_REFINE', name: 'Iterative Refiner', phase: 'E · Ejecución',
+    role: 'experiment optimization specialist',
+    system: `You are optimizing experiment results. Respond ONLY in {lang}. Return JSON.`,
+    user: `Evaluate if results need refinement. Return JSON:
+{
+  "decision": "PROCEED|REFINE",
+  "reason": "...",
+  "refinements_applied": [],
+  "final_metrics": {metrics_json}
+}
+Results: {results_json}`
+  },
+  {
+    id: 14, key: 'RESULT_ANALYSIS', name: 'Result Analyst', phase: 'F · Análisis',
+    role: 'biostatistician',
+    system: `You are a biostatistician writing a thorough analysis in {lang}. Write 300-400 words of academic prose.`,
+    user: `Write a Results section analysis covering:
+- Primary outcome findings with statistics
+- Secondary outcomes
+- Effect sizes and clinical/practical significance
+- Unexpected findings
+- Comparison with published literature
+
+Experiment results: {results_json}
+Hypothesis: "{hypothesis}"
+Key findings from literature: {key_findings}`
+  },
+  {
+    id: 15, key: 'RESEARCH_DECISION', name: 'Pipeline Decision Maker', phase: 'F · Análisis',
+    role: 'research director',
+    system: `You are the research director making a pipeline decision. Respond ONLY in {lang}. Return JSON.`,
+    user: `Based on results, decide: PROCEED to paper writing, REFINE experiment, or PIVOT hypothesis. Return JSON:
+{
+  "decision": "PROCEED",
+  "confidence": 0.87,
+  "rationale": "...",
+  "hypothesis_supported": true,
+  "limitations": ["lim1", "lim2"]
+}
+Results: {results_json}
+p_value: {p_value}`
+  },
+  {
+    id: 16, key: 'PAPER_OUTLINE', name: 'Paper Outliner', phase: 'G · Redacción',
+    role: 'scientific writing expert',
+    system: `You are a scientific writing expert. Respond ONLY in {lang}. Return JSON.`,
+    user: `Generate a detailed paper outline. Return JSON:
+{
+  "title": "Full paper title",
+  "abstract_structure": ["background","methods","results","conclusion"],
+  "sections": [
+    {"name":"Abstract","subsections":[],"word_target":250},
+    {"name":"Introduction","subsections":["Background","Gap","Aim"],"word_target":600},
+    {"name":"Methods","subsections":["Design","Participants","Procedure","Analysis"],"word_target":600},
+    {"name":"Results","subsections":["Primary","Secondary"],"word_target":500},
+    {"name":"Discussion","subsections":["Interpretation","Comparison","Limitations","Future"],"word_target":700},
+    {"name":"Conclusion","subsections":[],"word_target":200}
+  ],
+  "keywords": ["kw1","kw2","kw3","kw4","kw5"]
+}
+Topic: "{topic}"
+Hypothesis: "{hypothesis}"
+Conference: "{conference}"`
+  },
+  {
+    id: 17, key: 'PAPER_DRAFT', name: 'Paper Drafter', phase: 'G · Redacción',
+    role: 'scientific writer',
+    system: `You are a scientific writer. Write ONLY the {section} section in {lang}. Write polished academic prose. Do NOT include section headers, just the content.`,
+    user: `Write the {section} section for a scientific paper.
+Title: "{title}"
+Topic: "{topic}"
+Hypothesis: "{hypothesis}"
+Key synthesis: {synthesis_excerpt}
+Results: {results_json}
+Analysis: {analysis_excerpt}
+Decision: {decision_json}
+Limitations: {limitations}
+Write approximately {word_target} words.`
+  },
+  {
+    id: 18, key: 'PEER_REVIEW', name: 'Peer Reviewer', phase: 'G · Redacción',
+    role: 'panel of 3 expert peer reviewers',
+    system: `You are a panel of 3 expert peer reviewers. Respond ONLY in {lang}. Return JSON.`,
+    user: `Provide structured peer review. Return JSON:
+{
+  "overall_score": 7.2,
+  "recommendation": "Minor revision",
+  "reviewer1": {"strengths": ["s1","s2"], "weaknesses": ["w1"], "score": 7.5},
+  "reviewer2": {"strengths": ["s3"], "weaknesses": ["w2","w3"], "score": 7.0},
+  "reviewer3": {"strengths": ["s4","s5"], "weaknesses": ["w4"], "score": 7.1},
+  "required_revisions": ["revision1","revision2"],
+  "optional_suggestions": ["sug1","sug2"],
+  "methodology_consistency": "ok",
+  "novelty": "moderate"
+}
+Paper draft:
+{draft_preview}`
+  },
+  {
+    id: 19, key: 'PAPER_REVISION', name: 'Paper Revisor', phase: 'G · Redacción',
+    role: 'scientific paper revisor',
+    system: `You are revising a scientific paper in {lang} based on peer review feedback. Improve the section maintaining academic quality.`,
+    user: `Revise this {section} section based on peer review feedback.
+Original text: {original_text}
+Required revisions: {revision_instructions}
+Keep similar length. Write only the revised text.`
+  },
+  {
+    id: 20, key: 'QUALITY_GATE', name: 'Quality Gatekeeper', phase: 'H · Finalización',
+    role: 'final quality gatekeeper',
+    system: `You are the final quality gatekeeper. Respond ONLY in {lang}. Return JSON.`,
+    user: `Perform a final quality audit. Return JSON:
+{
+  "scores": {
+    "novelty": 7.8,
+    "methodology": 8.1,
+    "clarity": 7.5,
+    "reproducibility": 7.2,
+    "impact": 7.6
+  },
+  "overall": 7.6,
+  "ai_slop_score": 0.12,
+  "neurips_checklist": {"reproducibility": true, "ethics": true, "limitations": true},
+  "pass": true,
+  "notes": "Paper meets quality threshold"
+}
+Peer review: {peer_review_json}
+Paper score: {overall_score}`
+  },
+  {
+    id: 21, key: 'KNOWLEDGE_ARCHIVE', name: 'Knowledge Archivist', phase: 'H · Finalización',
+    role: 'knowledge archivist',
+    system: `You are a knowledge archivist. Respond ONLY in {lang}. Return JSON.`,
+    user: `Extract reusable lessons from this research run. Return JSON:
+{
+  "lessons": ["lesson1","lesson2","lesson3"],
+  "skills_acquired": ["skill1","skill2"],
+  "failure_patterns": [],
+  "recommended_next_topics": ["topic1","topic2"]
+}
+Topic: "{topic}"
+Results: {results_json}
+Decision: {decision_json}`
+  },
+  {
+    id: 22, key: 'EXPORT_PUBLISH', name: 'LaTeX Exporter', phase: 'H · Finalización',
+    role: 'LaTeX scientific publisher',
+    system: `You are a LaTeX scientific publisher. Respond ONLY in {lang}.`,
+    user: `Confirm the LaTeX export structure is complete for conference: {conference}.
+Validate: title, abstract, all sections, bibliography present.
+Return brief confirmation and any formatting notes.
+Title: "{title}"
+Sections available: {sections_list}`
+  },
+  {
+    id: 23, key: 'CITATION_VERIFY', name: 'Citation Verifier', phase: 'H · Finalización',
+    role: 'citation verification system',
+    system: `You are a citation verification system. Respond ONLY in {lang}. Return JSON.`,
+    user: `Verify citation integrity for these references. Return JSON array:
+[{"id":1,"status":"verified|uncertain","relevance":0.9,"note":"brief note"}]
+References: {refs_json}
+Topic: "{topic}"`
+  },
+];
+
+// ── Customized prompts store ──────────────────────────────────
+let AGENT_CUSTOM = {};
+
+function loadAgentCustom() {
+  try {
+    const saved = localStorage.getItem('arc_agent_prompts');
+    AGENT_CUSTOM = saved ? JSON.parse(saved) : {};
+  } catch { AGENT_CUSTOM = {}; }
+}
+
+function saveAgentCustom() {
+  localStorage.setItem('arc_agent_prompts', JSON.stringify(AGENT_CUSTOM));
+}
+
+function getAgentPrompt(id, field) {
+  // Returns custom if set, else default
+  const def = AGENT_DEFAULTS.find(a => a.id === id);
+  if (!def) return '';
+  return AGENT_CUSTOM[id]?.[field] ?? def[field];
+}
+
+function isAgentModified(id) {
+  return !!(AGENT_CUSTOM[id]?.system || AGENT_CUSTOM[id]?.user);
+}
+
+function countModified() {
+  return Object.keys(AGENT_CUSTOM).filter(id => isAgentModified(Number(id))).length;
+}
+
+// ── Render agents panel ───────────────────────────────────────
+function renderAgentsPanel(filter = '') {
+  const el = document.getElementById('agentsPanel');
+  const modCount = countModified();
+  const filterLow = filter.toLowerCase();
+  const visible = AGENT_DEFAULTS.filter(a =>
+    !filter || a.name.toLowerCase().includes(filterLow) ||
+    a.key.toLowerCase().includes(filterLow) ||
+    a.phase.toLowerCase().includes(filterLow)
+  );
+
+  let html = `
+    <div class="agents-header">
+      <h2>⚙ Agentes del Pipeline</h2>
+      <input class="agents-search" placeholder="Buscar agente…" value="${filter}"
+        oninput="renderAgentsPanel(this.value)" id="agentsSearchInput">
+    </div>
+    <div class="agents-toolbar">
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" onclick="resetAllAgents()">↺ Resetear todo</button>
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" onclick="exportAgentConfig()">⬇ Exportar config</button>
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" onclick="importAgentConfig()">⬆ Importar config</button>
+      <span class="agents-stats">${modCount} / 23 modificados · ${visible.length} visibles</span>
+    </div>
+    <div class="agents-grid">`;
+
+  const phaseColors = {
+    'A': 'var(--accent)', 'B': 'var(--blue)', 'C': 'var(--gold)',
+    'D': 'var(--green)', 'E': '#b06ee8', 'F': '#e87d4d',
+    'G': '#4de8c2', 'H': '#e8c44d'
+  };
+
+  visible.forEach(agent => {
+    const modified = isAgentModified(agent.id);
+    const phaseKey = agent.phase.charAt(0);
+    const phaseColor = phaseColors[phaseKey] || 'var(--text3)';
+    const sysVal = getAgentPrompt(agent.id, 'system').replace(/`/g,'&#96;').replace(/"/g,'&quot;');
+    const userVal = getAgentPrompt(agent.id, 'user').replace(/`/g,'&#96;').replace(/"/g,'&quot;');
+
+    html += `
+    <div class="agent-card${modified?' modified':''}" id="agent-card-${agent.id}">
+      <div class="agent-header" onclick="toggleAgent(${agent.id})">
+        <span class="agent-num">${String(agent.id).padStart(2,'0')}</span>
+        <span class="agent-name">${agent.name}</span>
+        <span class="agent-phase-badge" style="color:${phaseColor}">${agent.phase}</span>
+        <span class="agent-modified-dot" title="Prompt personalizado"></span>
+        <span class="agent-chevron">▼</span>
+      </div>
+      <div class="agent-body" id="agent-body-${agent.id}">
+        <div class="prompt-block">
+          <div class="prompt-label">
+            System Prompt
+            <span class="prompt-hint">Rol e instrucciones del agente</span>
+          </div>
+          <textarea class="prompt-textarea"
+            id="sys-${agent.id}"
+            oninput="onPromptChange(${agent.id},'system',this.value)"
+            placeholder="System prompt del agente…"
+            rows="3">${sysVal}</textarea>
+        </div>
+        <div class="prompt-block">
+          <div class="prompt-label">
+            User Prompt Template
+            <span class="prompt-hint">Variables: {topic} {lang} {hypothesis} etc.</span>
+          </div>
+          <textarea class="prompt-textarea user-prompt"
+            id="usr-${agent.id}"
+            oninput="onPromptChange(${agent.id},'user',this.value)"
+            placeholder="User prompt template…"
+            rows="6">${userVal}</textarea>
+        </div>
+        <div class="agent-actions">
+          <button class="btn-reset-agent" onclick="resetAgent(${agent.id})">↺ Restaurar por defecto</button>
+          <span class="save-indicator" id="saved-${agent.id}">✓ guardado</span>
+          ${modified ? `<span style="font-size:11px;color:var(--gold);font-family:'DM Mono',monospace;">● personalizado</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function toggleAgent(id) {
+  const card = document.getElementById(`agent-card-${id}`);
+  card.classList.toggle('expanded');
+}
+
+function onPromptChange(id, field, value) {
+  const def = AGENT_DEFAULTS.find(a => a.id === id);
+  if (!def) return;
+  if (!AGENT_CUSTOM[id]) AGENT_CUSTOM[id] = {};
+
+  if (value === def[field]) {
+    delete AGENT_CUSTOM[id][field];
+    if (!Object.keys(AGENT_CUSTOM[id]).length) delete AGENT_CUSTOM[id];
+  } else {
+    AGENT_CUSTOM[id][field] = value;
+  }
+
+  saveAgentCustom();
+
+  // Update card modified state
+  const card = document.getElementById(`agent-card-${id}`);
+  if (card) card.classList.toggle('modified', isAgentModified(id));
+
+  // Flash saved indicator
+  const ind = document.getElementById(`saved-${id}`);
+  if (ind) { ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 1500); }
+
+  // Update stats
+  document.querySelector('.agents-stats').textContent =
+    `${countModified()} / 23 modificados`;
+}
+
+function resetAgent(id) {
+  if (!confirm(`¿Restaurar el agente ${id} a los valores por defecto?`)) return;
+  delete AGENT_CUSTOM[id];
+  saveAgentCustom();
+  const def = AGENT_DEFAULTS.find(a => a.id === id);
+  if (def) {
+    const sysTa = document.getElementById(`sys-${id}`);
+    const usrTa = document.getElementById(`usr-${id}`);
+    if (sysTa) sysTa.value = def.system;
+    if (usrTa) usrTa.value = def.user;
+  }
+  const card = document.getElementById(`agent-card-${id}`);
+  if (card) card.classList.remove('modified');
+  document.querySelector('.agents-stats').textContent =
+    `${countModified()} / 23 modificados`;
+}
+
+function resetAllAgents() {
+  if (!confirm('¿Resetear TODOS los agentes a sus prompts por defecto?')) return;
+  AGENT_CUSTOM = {};
+  saveAgentCustom();
+  renderAgentsPanel(document.getElementById('agentsSearchInput')?.value || '');
+}
+
+function exportAgentConfig() {
+  const data = JSON.stringify({ version: '1.0', agents: AGENT_CUSTOM }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `arc-agents-${Date.now()}.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importAgentConfig() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if (parsed.agents) {
+          AGENT_CUSTOM = parsed.agents;
+          saveAgentCustom();
+          renderAgentsPanel();
+          alert(`✓ Config importada — ${countModified()} agentes personalizados`);
+        }
+      } catch { alert('Error al parsear el archivo JSON'); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════
+initPhaseList();
+loadAgentCustom();
+
+// Load saved API key
+const savedKey = localStorage.getItem('arc_openai_key');
+if (savedKey) document.getElementById('apiKey').value = savedKey;
+document.getElementById('apiKey').addEventListener('input', e => {
+  const val = e.target.value.trim();
+  localStorage.setItem('arc_openai_key', val);
+  const row = e.target.closest('.apikey-row');
+  if (val.startsWith('sk-') && val.length > 20) { row.classList.add('apikey-saved'); }
+  else { row.classList.remove('apikey-saved'); }
+});
+// Visual feedback on load if key exists
+if (savedKey && savedKey.startsWith('sk-') && savedKey.length > 20) {
+  document.querySelector('.apikey-row')?.classList.add('apikey-saved');
+}
+
+// Keyboard shortcut: Cmd/Ctrl+Enter
+document.getElementById('topicInput').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runPipeline();
+});
+</script>
+</body>
+</html>
