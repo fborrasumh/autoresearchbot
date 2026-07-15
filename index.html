@@ -1049,6 +1049,8 @@ async function callLLM(systemPrompt, userPrompt, temperature=0.7, agentId=null) 
       model,
       temperature,
       max_tokens: 3000,
+      ...( /json/i.test(systemPrompt + userPrompt) && !/Return JSON array/i.test(userPrompt)
+           ? { response_format: { type: 'json_object' } } : {} ),
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -1077,12 +1079,24 @@ async function callLLM(systemPrompt, userPrompt, temperature=0.7, agentId=null) 
 }
 
 function parseJSON(text) {
-  try {
-    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    return JSON.parse(clean);
-  } catch {
-    return null;
+  if (!text) return null;
+  const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+  try { return JSON.parse(clean); } catch {}
+  // Fallback: extraer el primer bloque {...} o [...] completo
+  for (const [open, close] of [['{','}'],['[',']']]) {
+    const a = clean.indexOf(open), b = clean.lastIndexOf(close);
+    if (a !== -1 && b > a) {
+      try { return JSON.parse(clean.slice(a, b + 1)); } catch {}
+    }
   }
+  return null;
+}
+
+// Devuelve el primer valor definido entre varias claves alternativas (ES/EN)
+function pickKey(obj, ...keys) {
+  if (!obj) return undefined;
+  for (const k of keys) if (obj[k] !== undefined) return obj[k];
+  return undefined;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1163,7 +1177,7 @@ async function runPipeline() {
 
     await runStage(1, 'TOPIC_INIT', async () => {
       const r = await callLLM(
-        `You are a research scoping expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a research scoping expert. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Analyze this research topic and return JSON:
 {
   "refined_topic": "polished topic",
@@ -1184,7 +1198,7 @@ Topic: "${topic}"`
 
     await runStage(2, 'PROBLEM_DECOMPOSE', async () => {
       const r = await callLLM(
-        `You are a systematic research methodologist. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a systematic research methodologist. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Decompose the research topic into structured components. Return JSON:
 {
   "main_question": "main research question",
@@ -1210,7 +1224,7 @@ Topic: "${topic}"`
 
     await runStage(3, 'SEARCH_STRATEGY', async () => {
       const r = await callLLM(
-        `You are a systematic review expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a systematic review expert. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Design a search strategy for this topic. Return JSON:
 {
   "keywords": ["kw1","kw2","kw3","kw4","kw5"],
@@ -1423,7 +1437,7 @@ Papers: ${JSON.stringify(allPapers.map(p=>({id:p.id, title:p.title, abstract:p.a
 
       // LLM final screening with inclusion/exclusion criteria
       const r = await callLLM(
-        `You are a systematic review screener. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a systematic review screener. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Screen these papers. Keep IDs with relevance_score >= 0.55 AND matching inclusion criteria. Return JSON:
 {
   "included": [1,2,3],
@@ -1435,11 +1449,18 @@ Exclusion criteria: ${JSON.stringify(D.searchStrategy?.exclusion_criteria)}
 Papers: ${JSON.stringify(preFiltered.map(p => ({id:p.id, title:p.title, year:p.year, score:p.relevance_score, abstract:p.abstract?.substring(0,100)})))}`
       );
       const screen = parseJSON(r);
-      if (screen?.included) {
-        const incIds = new Set(screen.included);
-        D.papers = preFiltered.filter(p => incIds.has(p.id));
-        log(`Cribado final: ${D.papers.length} papers incluidos`, 'success', 'SCREEN');
-        log(`Motivo: ${screen.reason}`, 'info', 'SCREEN');
+      const included = pickKey(screen, 'included', 'incluidos', 'incluidas');
+      if (Array.isArray(included) && included.length > 0) {
+        const incIds = new Set(included.map(Number)); // el modelo puede devolver IDs como strings
+        const kept = preFiltered.filter(p => incIds.has(Number(p.id)));
+        if (kept.length > 0) {
+          D.papers = kept;
+          log(`Cribado final: ${D.papers.length} papers incluidos`, 'success', 'SCREEN');
+          log(`Motivo: ${pickKey(screen, 'reason', 'motivo', 'razon') || '—'}`, 'info', 'SCREEN');
+        } else {
+          D.papers = preFiltered; // los IDs no coinciden: conserva el pre-filtro
+          log(`⚠ Los IDs del cribado no coinciden con los papers — conservando ${D.papers.length} pre-filtrados`, 'warn', 'SCREEN');
+        }
       } else {
         D.papers = preFiltered; // fallback: keep pre-filtered
         log(`Cribado por defecto: ${D.papers.length} papers`, 'info', 'SCREEN');
@@ -1448,7 +1469,7 @@ Papers: ${JSON.stringify(preFiltered.map(p => ({id:p.id, title:p.title, year:p.y
 
     await runStage(6, 'KNOWLEDGE_EXTRACT', async () => {
       const r = await callLLM(
-        `You are a knowledge extraction specialist. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a knowledge extraction specialist. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Extract structured knowledge from this literature. Return JSON:
 {
   "key_findings": ["finding1","finding2","finding3","finding4"],
@@ -1491,7 +1512,7 @@ Gaps: ${JSON.stringify(D.knowledge?.gaps)}`
 
     await runStage(8, 'HYPOTHESIS_GEN', async () => {
       const r = await callLLM(
-        `You are a research hypothesis generator with multi-agent debate capability. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a research hypothesis generator with multi-agent debate capability. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Through multi-agent debate, generate 3 testable hypotheses. Return JSON:
 {
   "hypotheses": [
@@ -1521,7 +1542,7 @@ PICO: ${JSON.stringify(D.problemTree?.pico)}`
 
     await runStage(9, 'EXPERIMENT_DESIGN', async () => {
       const r = await callLLM(
-        `You are an experiment design expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are an experiment design expert. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Design an experiment to test the hypothesis. Return JSON:
 {
   "design": "study design type",
@@ -1564,7 +1585,7 @@ Keep it runnable and realistic.`
 
     await runStage(11, 'RESOURCE_PLANNING', async () => {
       const r = await callLLM(
-        `You are a research project manager. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a research project manager. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Estimate resources for this study. Return JSON:
 {
   "timeline_weeks": 12,
@@ -1590,7 +1611,7 @@ Design: ${JSON.stringify(D.experimentDesign)}`
 
     await runStage(12, 'EXPERIMENT_RUN', async () => {
       const r = await callLLM(
-        `You are simulating experiment execution. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are simulating experiment execution. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Simulate running the experiment and return realistic results. Return JSON:
 {
   "status": "completed",
@@ -1619,7 +1640,7 @@ Hypothesis: "${D.selectedHypothesis}"`
 
     await runStage(13, 'ITERATIVE_REFINE', async () => {
       const r = await callLLM(
-        `You are optimizing experiment results. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are optimizing experiment results. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Evaluate if results need refinement. Return JSON:
 {
   "decision": "PROCEED|REFINE",
@@ -1659,7 +1680,7 @@ Key findings from literature: ${JSON.stringify(D.knowledge?.key_findings?.slice(
 
     await runStage(15, 'RESEARCH_DECISION', async () => {
       const r = await callLLM(
-        `You are the research director making a pipeline decision. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are the research director making a pipeline decision. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Based on results, decide: PROCEED to paper writing, REFINE experiment, or PIVOT hypothesis. Return JSON:
 {
   "decision": "PROCEED",
@@ -1685,7 +1706,7 @@ p_value: ${D.experimentResults?.p_value}`
 
     await runStage(16, 'PAPER_OUTLINE', async () => {
       const r = await callLLM(
-        `You are a scientific writing expert. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a scientific writing expert. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Generate a detailed paper outline. Return JSON:
 {
   "title": "Full paper title",
@@ -1745,7 +1766,7 @@ Write ${sec === 'Abstract' ? 250 : sec === 'Introduction' ? 600 : sec === 'Metho
     await runStage(18, 'PEER_REVIEW', async () => {
       const draftPreview = Object.entries(D.sections).map(([k,v]) => `## ${k}\n${v?.substring(0,300)}...`).join('\n\n');
       const r = await callLLM(
-        `You are a panel of 3 expert peer reviewers. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a panel of 3 expert peer reviewers. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Provide structured peer review. Return JSON:
 {
   "overall_score": 7.2,
@@ -1802,7 +1823,7 @@ Keep similar length. Write only the revised text.`
 
     await runStage(20, 'QUALITY_GATE', async () => {
       const r = await callLLM(
-        `You are the final quality gatekeeper. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are the final quality gatekeeper. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Perform a final quality audit. Return JSON:
 {
   "scores": {
@@ -1821,11 +1842,36 @@ Keep similar length. Write only the revised text.`
 Peer review: ${JSON.stringify(D.peerReview)}
 Paper score: ${D.peerReview?.overall_score}`
       );
-      const qa = parseJSON(r);
-      if (qa) {
+      const qaRaw = parseJSON(r);
+      // Normaliza claves (el modelo puede devolverlas en español o con variantes)
+      const qa = qaRaw ? {
+        scores: pickKey(qaRaw, 'scores', 'puntuaciones', 'puntajes'),
+        overall: Number(pickKey(qaRaw, 'overall', 'overall_score', 'global', 'puntuacion_general', 'general')),
+        ai_slop_score: Number(pickKey(qaRaw, 'ai_slop_score', 'puntuacion_ai_slop', 'slop_score')),
+        neurips_checklist: pickKey(qaRaw, 'neurips_checklist', 'checklist'),
+        pass: pickKey(qaRaw, 'pass', 'passed', 'aprobado', 'apto', 'supera'),
+        notes: pickKey(qaRaw, 'notes', 'notas', 'comentarios', 'observaciones') || '',
+      } : null;
+
+      if (qa && (qa.scores || !Number.isNaN(qa.overall))) {
+        if (Number.isNaN(qa.overall) && qa.scores) {
+          const vals = Object.values(qa.scores).map(Number).filter(v => !Number.isNaN(v));
+          qa.overall = vals.length ? +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : NaN;
+        }
+        if (Number.isNaN(qa.ai_slop_score)) qa.ai_slop_score = null;
+        if (typeof qa.pass !== 'boolean') qa.pass = (qa.overall || 0) >= 6;
         D.qualityGate = qa;
         log(`Quality gate: ${qa.pass ? '✓ PASSED' : '✗ FAILED'} (score: ${qa.overall})`, qa.pass?'success':'error', 'QUALITY_GATE');
-        log(`AI-slop score: ${qa.ai_slop_score} (${qa.ai_slop_score < 0.2 ? 'bajo ✓' : 'alto ✗'})`, 'info', 'QUALITY_GATE');
+        if (qa.ai_slop_score !== null) log(`AI-slop score: ${qa.ai_slop_score} (${qa.ai_slop_score < 0.2 ? 'bajo ✓' : 'alto ✗'})`, 'info', 'QUALITY_GATE');
+      } else {
+        // Fallback: deriva el veredicto del peer review para no dejar el panel vacío
+        const prScore = Number(D.peerReview?.overall_score) || null;
+        D.qualityGate = {
+          scores: null, overall: prScore, ai_slop_score: null,
+          pass: (prScore || 0) >= 6,
+          notes: 'Auditoría automática no disponible (respuesta del modelo no parseable); veredicto derivado del peer review.',
+        };
+        log('⚠ Respuesta del Quality Gate no parseable — usando fallback basado en peer review', 'warn', 'QUALITY_GATE');
       }
     });
 
@@ -1864,7 +1910,7 @@ Paper score: ${D.peerReview?.overall_score}`
 
     await runStage(23, 'CITATION_VERIFY', async () => {
       const r = await callLLM(
-        `You are a citation verification system. Respond ONLY in ${langLabel}. Return JSON.`,
+        `You are a citation verification system. Write all JSON string VALUES in ${langLabel}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
         `Verify citation integrity for these references. Return JSON array:
 [{"id":1,"status":"verified|uncertain","relevance":0.9,"note":"..."}]
 References: ${JSON.stringify(D.papers?.slice(0,8).map(p => ({id:p.id,title:p.title,doi:p.doi,year:p.year})))}
@@ -1970,6 +2016,15 @@ function renderReferences(D) {
   empty.style.display = 'none';
   el.style.display = 'block';
 
+  if (!D.papers || D.papers.length === 0) {
+    el.innerHTML = `<div style="padding:24px;color:var(--text3);font-size:14px;">
+      ⚠ No hay referencias disponibles. Las APIs académicas no devolvieron resultados
+      o el cribado excluyó todos los papers. Revisa el log de las etapas
+      <strong>LIT_COLLECT</strong> y <strong>LITERATURE_SCREEN</strong>.
+    </div>`;
+    return;
+  }
+
   const verif = D.citationVerification || [];
   const verifMap = {};
   verif.forEach(v => verifMap[v.id] = v);
@@ -2067,8 +2122,8 @@ function renderPeerReview(D) {
     const qg = D.qualityGate;
     html += `<div style="background:${qg.pass?'var(--green-dim)':'rgba(232,88,61,.08)'};border:1px solid ${qg.pass?'rgba(61,204,142,.25)':'rgba(232,88,61,.2)'};border-radius:10px;padding:16px;">
       <div style="font-weight:600;color:${qg.pass?'var(--green)':'var(--accent)'};margin-bottom:8px;">Quality Gate: ${qg.pass?'✓ PASSED':'✗ FAILED'}</div>
-      <div style="font-size:13px;color:var(--text2);">${qg.notes}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace;">AI-slop score: ${qg.ai_slop_score} · Overall: ${qg.overall}/10</div>
+      <div style="font-size:13px;color:var(--text2);">${qg.notes || ''}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace;">AI-slop score: ${qg.ai_slop_score ?? '—'} · Overall: ${qg.overall ?? '—'}/10</div>
     </div>`;
   }
 
@@ -2174,7 +2229,7 @@ const AGENT_DEFAULTS = [
   {
     id: 1, key: 'TOPIC_INIT', name: 'Topic Initializer', phase: 'A · Scoping',
     role: 'research scoping expert',
-    system: `You are a research scoping expert. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a research scoping expert. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Analyze this research topic and return JSON:
 {
   "refined_topic": "polished topic",
@@ -2188,7 +2243,7 @@ Topic: "{topic}"`
   {
     id: 2, key: 'PROBLEM_DECOMPOSE', name: 'Problem Decomposer', phase: 'A · Scoping',
     role: 'systematic research methodologist',
-    system: `You are a systematic research methodologist. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a systematic research methodologist. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Decompose the research topic into structured components. Return JSON:
 {
   "main_question": "main research question",
@@ -2202,7 +2257,7 @@ Topic: "{topic}"`
   {
     id: 3, key: 'SEARCH_STRATEGY', name: 'Search Strategist', phase: 'B · Literatura',
     role: 'systematic review expert',
-    system: `You are a systematic review expert. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a systematic review expert. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Design a search strategy for this topic. Return JSON:
 {
   "keywords": ["kw1","kw2","kw3","kw4","kw5"],
@@ -2228,7 +2283,7 @@ Papers: {papers_json}`
   {
     id: 5, key: 'LITERATURE_SCREEN', name: 'Literature Screener', phase: 'B · Literatura',
     role: 'systematic review screener',
-    system: `You are a systematic review screener. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a systematic review screener. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Screen these papers. Keep IDs with relevance_score >= 0.55 AND matching inclusion criteria. Return JSON:
 {
   "included": [1,2,3],
@@ -2242,7 +2297,7 @@ Papers: {papers_json}`
   {
     id: 6, key: 'KNOWLEDGE_EXTRACT', name: 'Knowledge Extractor', phase: 'B · Literatura',
     role: 'knowledge extraction specialist',
-    system: `You are a knowledge extraction specialist. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a knowledge extraction specialist. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Extract structured knowledge from this literature. Return JSON:
 {
   "key_findings": ["finding1","finding2","finding3","finding4"],
@@ -2272,7 +2327,7 @@ Gaps: {gaps}`
   {
     id: 8, key: 'HYPOTHESIS_GEN', name: 'Hypothesis Generator', phase: 'C · Síntesis',
     role: 'research hypothesis generator with multi-agent debate capability',
-    system: `You are a research hypothesis generator with multi-agent debate capability. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a research hypothesis generator with multi-agent debate capability. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Through multi-agent debate, generate 3 testable hypotheses. Return JSON:
 {
   "hypotheses": [
@@ -2290,7 +2345,7 @@ PICO: {pico}`
   {
     id: 9, key: 'EXPERIMENT_DESIGN', name: 'Experiment Designer', phase: 'D · Diseño',
     role: 'experiment design expert',
-    system: `You are an experiment design expert. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are an experiment design expert. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Design an experiment to test the hypothesis. Return JSON:
 {
   "design": "study design type",
@@ -2324,7 +2379,7 @@ Keep it runnable and realistic.`
   {
     id: 11, key: 'RESOURCE_PLANNING', name: 'Resource Planner', phase: 'D · Diseño',
     role: 'research project manager',
-    system: `You are a research project manager. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a research project manager. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Estimate resources for this study. Return JSON:
 {
   "timeline_weeks": 12,
@@ -2340,7 +2395,7 @@ Design: {design_json}`
   {
     id: 12, key: 'EXPERIMENT_RUN', name: 'Experiment Runner', phase: 'E · Ejecución',
     role: 'experiment execution simulator',
-    system: `You are simulating experiment execution. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are simulating experiment execution. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Simulate running the experiment and return realistic results. Return JSON:
 {
   "status": "completed",
@@ -2361,7 +2416,7 @@ Hypothesis: "{hypothesis}"`
   {
     id: 13, key: 'ITERATIVE_REFINE', name: 'Iterative Refiner', phase: 'E · Ejecución',
     role: 'experiment optimization specialist',
-    system: `You are optimizing experiment results. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are optimizing experiment results. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Evaluate if results need refinement. Return JSON:
 {
   "decision": "PROCEED|REFINE",
@@ -2389,7 +2444,7 @@ Key findings from literature: {key_findings}`
   {
     id: 15, key: 'RESEARCH_DECISION', name: 'Pipeline Decision Maker', phase: 'F · Análisis',
     role: 'research director',
-    system: `You are the research director making a pipeline decision. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are the research director making a pipeline decision. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Based on results, decide: PROCEED to paper writing, REFINE experiment, or PIVOT hypothesis. Return JSON:
 {
   "decision": "PROCEED",
@@ -2404,7 +2459,7 @@ p_value: {p_value}`
   {
     id: 16, key: 'PAPER_OUTLINE', name: 'Paper Outliner', phase: 'G · Redacción',
     role: 'scientific writing expert',
-    system: `You are a scientific writing expert. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a scientific writing expert. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Generate a detailed paper outline. Return JSON:
 {
   "title": "Full paper title",
@@ -2441,7 +2496,7 @@ Write approximately {word_target} words.`
   {
     id: 18, key: 'PEER_REVIEW', name: 'Peer Reviewer', phase: 'G · Redacción',
     role: 'panel of 3 expert peer reviewers',
-    system: `You are a panel of 3 expert peer reviewers. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a panel of 3 expert peer reviewers. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Provide structured peer review. Return JSON:
 {
   "overall_score": 7.2,
@@ -2469,7 +2524,7 @@ Keep similar length. Write only the revised text.`
   {
     id: 20, key: 'QUALITY_GATE', name: 'Quality Gatekeeper', phase: 'H · Finalización',
     role: 'final quality gatekeeper',
-    system: `You are the final quality gatekeeper. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are the final quality gatekeeper. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Perform a final quality audit. Return JSON:
 {
   "scores": {
@@ -2491,7 +2546,7 @@ Paper score: {overall_score}`
   {
     id: 21, key: 'KNOWLEDGE_ARCHIVE', name: 'Knowledge Archivist', phase: 'H · Finalización',
     role: 'knowledge archivist',
-    system: `You are a knowledge archivist. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a knowledge archivist. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Extract reusable lessons from this research run. Return JSON:
 {
   "lessons": ["lesson1","lesson2","lesson3"],
@@ -2516,7 +2571,7 @@ Sections available: {sections_list}`
   {
     id: 23, key: 'CITATION_VERIFY', name: 'Citation Verifier', phase: 'H · Finalización',
     role: 'citation verification system',
-    system: `You are a citation verification system. Respond ONLY in {lang}. Return JSON.`,
+    system: `You are a citation verification system. Write all JSON string VALUES in {lang}, but keep every JSON KEY exactly as specified in English. Return ONLY raw JSON — no prose, no markdown fences.`,
     user: `Verify citation integrity for these references. Return JSON array:
 [{"id":1,"status":"verified|uncertain","relevance":0.9,"note":"brief note"}]
 References: {refs_json}
